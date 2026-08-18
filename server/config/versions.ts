@@ -1,0 +1,12 @@
+export const PROMPT_VERSIONS = {
+  BRIEFING_PARSER: "v4.0",
+  METADATA_VERIFIER: "v4.1",
+  RESOURCE_VERIFIER: "v5.0",
+  DOCUMENT_ANALYZER: "v5.1",
+  COMPARISON_FINDER: "v5.0",
+  PAPER_EVALUATOR: "v5.2",
+  RECOMMENDATION_ENGINE: "v5.1",
+};
+
+export const SCHEMA_VERSION = process.env.CACHE_SCHEMA_VERSION || "v5.3-identity-preservation";
+export const ROUTE_VERSION = "v1.0";
