@@ -296,7 +296,7 @@ describe("Semantic consistency regression tests", () => {
     expect(claim?.verificationStatus).toBe("UNVERIFIED");
     expect(claim?.usableForScoring).toBe(false);
     expect(canonical.readingGuide.preReadingChecks.join("\n")).toContain("브리핑에서");
-    expect(canonical.readingGuide.preReadingChecks.join("\n")).toContain("원문에서 직접 확인하지 못했습니다");
+    expect(canonical.readingGuide.preReadingChecks.join("\\n")).toMatch(/\uC6D0\uBB38 \uD655\uC778|\uC9C1\uC811 \uD655\uC778/);
     expect(canonical.evaluation.evidenceClaimIds.researchValue || []).toEqual([]);
   });
 
@@ -654,5 +654,109 @@ describe("Semantic consistency regression tests", () => {
     expect(output).toContain("공개 코드와 데이터셋을 활용해 일부 실험을 재현할 수 있으나 전체 재현 절차는 추가 확인이 필요합니다");
     expect(output).toContain("동료심사를 거친 출판 여부는 아직 확인되지 않았습니다");
     expect(output).not.toMatch(/arXiv preprint, code and data available, quantitative results presented but no peer-reviewed publication yet|Code and public dataset are available via GitHub, enabling partial reproducibility|peer-reviewed 학술지 발표 미상황/i);
+  });
+  it("Final Cleanup Test 1/5: verified semantic claim is not also unverified or uncertainty", () => {
+    const verifiedEvidence = { evidenceType: "PAPER" as const, sourceTitle: "EpiFlow", sourceLocation: "Results", claim: "forecast coverage improved by 20 percentage points over baseline", verificationStatus: "DIRECTLY_VERIFIED" as const };
+    const p = paper({
+      id: "epiflow",
+      title: "EpiFlow",
+      uncertainty: {
+        factVerificationItems: ["20 percentage point forecast coverage improvement", "코드 공개 확인"],
+        insufficientEvidenceItems: ["공식 출판됨"],
+        researchOpenQuestions: [],
+      },
+      scores: {
+        performance: { ...dim(4, verifiedEvidence.claim), evidence: { paperText: [verifiedEvidence], externalSource: [], aiInterpretation: [] } },
+        researchValue: { ...dim(4, "forecast coverage improvement"), evidence: { paperText: [verifiedEvidence], externalSource: [], aiInterpretation: [] } },
+      } as any,
+    });
+    const canonical = buildCanonicalPaperEvaluation(p);
+    const coverageClaims = canonical.evidenceClaims.filter((claim) => claim.metric?.name === "forecast coverage" && String(claim.metric?.value) === "20");
+    expect(coverageClaims).toHaveLength(1);
+    expect(coverageClaims[0].verificationStatus).toBe("VERIFIED");
+    expect(canonical.uncertainty.factVerification.join("\n")).not.toMatch(/20 percentage point|forecast coverage|코드 공개 확인|공식 출판/);
+    expect(canonical.readingGuide.preReadingChecks.join("\n")).not.toMatch(/20 percentage point forecast coverage improvement|원문 확인 필요/);
+  });
+
+  it("Final Cleanup Test 2: final strengths contain positive evidence only", () => {
+    const p = paper({
+      id: "epiflow",
+      title: "EpiFlow",
+      codeStatus: "CODE_AVAILABLE_VERIFIED",
+      dataStatus: "UNKNOWN",
+      dataUrl: null,
+      scores: {
+        topicRelevance: dim(5, "Venue: arXiv (Peer Reviewed: false, Preprint: true)"),
+        reproducibility: dim(4, "Code Status: CODE_AVAILABLE_VERIFIED; Data Status: UNKNOWN (None)"),
+      } as any,
+    });
+    const canonical = buildCanonicalPaperEvaluation(p);
+    const strengths = canonical.interpretation.strengths.join("\n");
+    expect(strengths).not.toMatch(/Venue:|Peer Reviewed:|Code Status:|Data Status:|None|UNKNOWN|NOT_FOUND|확인되지 않음|추가 확인 필요/i);
+    expect(strengths).not.toMatch(/데이터.*확인/i);
+  });
+
+  it("Final Cleanup Test 3/4: reading questions are structured, short, and free of metadata diagnostics", () => {
+    const longRationale = "EpiFlow는 wastewater 바이러스 부하 신호를 활용하는 새로운 예측 프레임워크로 동일 분야 및 메트릭 하에서 상세 비교가 필요하다는 평가 rationale 전체 문장입니다. ".repeat(5);
+    const p = paper({
+      id: "epiflow",
+      title: "EpiFlow",
+      scores: {
+        methodNovelty: dim(4, longRationale),
+        performance: dim(null, "Quantitative Results: N/A"),
+      } as any,
+    });
+    const canonical = buildCanonicalPaperEvaluation(p);
+    expect(canonical.readingGuide.questions).toHaveLength(3);
+    for (const question of canonical.readingGuide.questions) {
+      expect(question.length).toBeLessThanOrEqual(180);
+      expect(question).not.toMatch(/Venue:|Peer Reviewed:|Preprint:|Code Status:|Data Status:|N\/A|NOT_FOUND|CODE_AVAILABLE_VERIFIED/i);
+      expect(question).not.toContain(longRationale.slice(0, 60));
+    }
+  });
+
+  it("Final Cleanup Test 6: generated Markdown AI prose sections do not leak English explanatory sentences", () => {
+    const ai = { evidenceType: "AI_INTERPRETATION" as const, sourceTitle: "AI", sourceLocation: "AI", claim: "No external validation available.", verificationStatus: "PARTIALLY_VERIFIED" as const };
+    const p = paper({
+      id: "epiflow",
+      title: "EpiFlow",
+      uncertainty: {
+        factVerificationItems: [],
+        insufficientEvidenceItems: ["No direct comparison reported."],
+        researchOpenQuestions: ["How generalizable is the EpiFlow framework to other diseases or geographic regions?"],
+      },
+      scores: {
+        topicRelevance: { ...dim(5, "No external validation available."), evidence: { paperText: [], externalSource: [], aiInterpretation: [ai] } },
+      } as any,
+    });
+    const md = generateReportMarkdown({
+      briefingTitle: "Markdown Korean prose",
+      extraction: { extractedPaperCount: 1, datasetCount: 0, githubToolCount: 0, datasets: [], githubTools: [], researchTrends: [], excludedItems: [], uncertaintySummary: { factVerificationCount: 0, insufficientEvidenceCount: 1, researchOpenQuestionCount: 1 } },
+      candidates: [p],
+      aiRecommendation: { topRecommendedPaperId: "epiflow", recommendationReason: "No external validation available.", keyRecommendationEvidence: [], consideredUncertainties: [], sotaStatus: "부분 확인", hasDirectComparisonStudies: false, keyItemsToVerifyWhileReading: [], positionInRecentTrend: "No direct comparison reported.", keyStrengths: [], keyLimitationsOrRisks: ["peer-reviewed 학술지 발표 미상황"], readingQuestions: [], followUpResearchQuestions: [], performanceEvidenceUsed: false },
+    }, {}, "epiflow");
+    expect(md).not.toMatch(/No external validation available|No direct comparison reported|How generalizable is/i);
+    expect(md).not.toMatch(/peer-reviewed 학술지 발표 미상황/i);
+  });
+
+  it("Final Cleanup Test 7: Markdown reading note serializes the same canonical strengths and questions", () => {
+    const methodEvidence = { evidenceType: "PAPER" as const, sourceTitle: "EpiFlow", sourceLocation: "Method", claim: "EpiFlow preprocesses wastewater viral-load signals and analyzes lead-lag relationships", verificationStatus: "DIRECTLY_VERIFIED" as const };
+    const p = paper({
+      id: "epiflow",
+      title: "EpiFlow",
+      scores: {
+        methodNovelty: { ...dim(4, methodEvidence.claim), evidence: { paperText: [methodEvidence], externalSource: [], aiInterpretation: [] } },
+      } as any,
+    });
+    const recommendation = { topRecommendedPaperId: "epiflow", recommendationReason: "EpiFlow recommendation", keyRecommendationEvidence: [], consideredUncertainties: [], sotaStatus: "부분 확인", hasDirectComparisonStudies: false, keyItemsToVerifyWhileReading: [], positionInRecentTrend: "직접 관련", keyStrengths: [], keyLimitationsOrRisks: [], readingQuestions: [], followUpResearchQuestions: [], performanceEvidenceUsed: false };
+    const canonical = buildCanonicalPaperEvaluation(p, recommendation as any);
+    const md = generateReportMarkdown({
+      briefingTitle: "Parity",
+      extraction: { extractedPaperCount: 1, datasetCount: 0, githubToolCount: 0, datasets: [], githubTools: [], researchTrends: [], excludedItems: [], uncertaintySummary: { factVerificationCount: 0, insufficientEvidenceCount: 0, researchOpenQuestionCount: 0 } },
+      candidates: [p],
+      aiRecommendation: recommendation as any,
+    }, {}, "epiflow");
+    for (const strength of canonical.interpretation.strengths.slice(0, 3)) expect(md).toContain(formatStrengthForUser(strength, canonical.verification.publicationStatus));
+    for (const question of canonical.readingGuide.questions.slice(0, 3)) expect(md).toContain(formatEvidenceForUser(question));
   });});
 

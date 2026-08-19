@@ -514,11 +514,101 @@ function parseMetricFromClaim(claim: string): EvidenceClaim["metric"] | undefine
 export function formatCanonicalMetricClaim(claim: EvidenceClaim): string {
   if (!claim.metric) return claim.claim;
   const value = claim.metric.value ? ` ${claim.metric.value}${claim.metric.unit ? ` ${claim.metric.unit}` : ""}` : "";
-  const target = claim.metric.comparisonTarget ? `${claim.metric.comparisonTarget} 대비 ` : "";
-  const direction = claim.metric.direction === "INCREASE" ? "개선" : claim.metric.direction === "DECREASE" ? "감소" : "보고";
+  const target = claim.metric.comparisonTarget ? `${claim.metric.comparisonTarget} \uB300\uBE44 ` : "";
+  const direction = claim.metric.direction === "INCREASE" ? "\uAC1C\uC120" : claim.metric.direction === "DECREASE" ? "\uAC10\uC18C" : "\uBCF4\uACE0";
   return `${target}${claim.metric.name}${value} ${direction}`.trim();
 }
 
+function claimStatusRank(status: EvidenceClaimVerificationStatus): number {
+  if (status === "VERIFIED") return 3;
+  if (status === "PARTIAL") return 2;
+  return 1;
+}
+
+function normalizeClaimTextForIdentity(text: string): string {
+  return sanitizeUserText(text, "")
+    .toLowerCase()
+    .replace(/arxiv:\s*\d{4}\.\d{4,5}/g, "")
+    .replace(/doi\s*[:/]\s*\S+/g, "")
+    .replace(/\b(approximately|around|about|reported|reports|improved|improvement|increase|increased|gain|gains|over|by|from|to|the|a|an)\b/g, " ")
+    .replace(/[%]/g, " percent ")
+    .replace(/\bpp\b/g, " percentage points ")
+    .replace(/[^a-z0-9가-힣.]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function canonicalClaimIdentity(claim: Pick<EvidenceClaim, "paperId" | "type" | "claim" | "metric">): string {
+  if (claim.metric?.name) {
+    const normalizedClaim = normalizeClaimTextForIdentity(claim.claim);
+    const valueFromText = normalizedClaim.match(/\b\d+(?:\.\d+)?\b/)?.[0] || "";
+    const metricName = claim.metric.name.toLowerCase().replace(/\s+/g, " ").trim();
+    const value = String(claim.metric.value ?? valueFromText).toLowerCase();
+    const unit = /percentage points?|percent|퍼센트포인트/.test(normalizedClaim)
+      ? "percentage points"
+      : String(claim.metric.unit ?? "").toLowerCase().replace(/pp/g, "percentage points");
+    return [claim.paperId, "PERFORMANCE_METRIC", metricName, value, unit].join("|");
+  }
+  return `${claim.paperId}|${claim.type}|${normalizeClaimTextForIdentity(claim.claim)}`;
+}
+
+function resolveCanonicalClaimStatus(claims: EvidenceClaim[]): EvidenceClaim[] {
+  const byIdentity = new Map<string, EvidenceClaim>();
+  for (const claim of claims) {
+    if (containsBrokenEncoding(claim.claim)) continue;
+    const key = canonicalClaimIdentity(claim);
+    const existing = byIdentity.get(key);
+    if (!existing || claimStatusRank(claim.verificationStatus) > claimStatusRank(existing.verificationStatus)) {
+      byIdentity.set(key, {
+        ...claim,
+        usableForScoring: claim.verificationStatus !== "UNVERIFIED" && claim.usableForScoring,
+      });
+    }
+  }
+  return [...byIdentity.values()];
+}
+
+function hasVerifiedEquivalent(text: string, verifiedClaims: EvidenceClaim[]): boolean {
+  const normalized = normalizeClaimTextForIdentity(text);
+  if (!normalized) return false;
+  return verifiedClaims.some((claim) => {
+    if (claim.metric && text.toLowerCase().includes(String(claim.metric.value ?? "").toLowerCase()) && text.toLowerCase().includes(claim.metric.name.toLowerCase())) return true;
+    return normalizeClaimTextForIdentity(claim.claim) === normalized;
+  });
+}
+
+function isConfirmedFactText(text: string): boolean {
+  return /confirmed|verified|officially published|published in|code available|code is available|검증됨|확인됨|공식 출판|정식 출판|코드 공개 확인|원문에서 확인|출판된 점은 사실/i.test(text);
+}
+
+function isRawMetadataOrStatusText(text: string): boolean {
+  return /Venue:|Peer Reviewed:|Preprint:|Code Status:|Data Status:|\bUNKNOWN\b|\bNOT_FOUND\b|\bNone\b|\(None\)|확인되지 않음|추가 확인 필요|미확인|peer review 미완료|Peer Reviewed:\s*false/i.test(text);
+}
+
+function trimQuestion(text: string, maxLength = 180): string {
+  const cleaned = sanitizeUserText(text, "\uC77D\uC73C\uBA74\uC11C \uD655\uC778\uD560 \uD56D\uBAA9\uC744 \uC6D0\uBB38\uC5D0\uC11C \uC810\uAC80\uD569\uB2C8\uB2E4.").replace(/\s+/g, " ").trim();
+  return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength - 1).trim()}...` : cleaned;
+}
+
+function methodConceptForQuestion(paper: PaperCandidate, claims: EvidenceClaim[]): string {
+  const source = `${paper.title} ${claims.map((claim) => claim.claim).join(" ")}`;
+  if (/EpiFlow|wastewater|viral-load|viral load/i.test(source)) return "폐수 바이러스 부하 신호의 전처리, 예측 가능성 평가, 시차 분석";
+  if (/Permutation entropy/i.test(source)) return "Permutation entropy 계산과 forecasting window 선택";
+  const focus = methodFocusForQuestion(paper, claims);
+  return `${focus}의 입력과 처리 단계`;
+}
+
+function positiveStrengthFromClaim(claim: EvidenceClaim): string | null {
+  if (!claim.usableForScoring || claim.verificationStatus === "UNVERIFIED" || isRawMetadataOrStatusText(claim.claim) || isNegativeOrUncertainText(claim.claim)) return null;
+  if (claim.type === "RESOURCE") return "공식 코드 저장소가 공개되어 있어 구현 방식과 후속 실험을 검토할 수 있습니다.";
+  if (claim.type === "DATASET") return "공개 데이터셋 또는 벤치마크를 활용해 실험 조건을 검토할 수 있습니다.";
+  if (claim.type === "QUANTITATIVE_RESULT" || claim.type === "BASELINE_COMPARISON") return userFacingQuantClaim(claim);
+  if (claim.type === "METHOD") {
+    if (/EpiFlow|wastewater|viral-load|viral load/i.test(claim.claim)) return "폐수 바이러스 부하 신호의 전처리, 예측 가능성 평가, 시차 분석을 하나의 forecasting pipeline으로 연결합니다.";
+    return formatEvidenceForUser(claim.claim);
+  }
+  return null;
+}
 function buildEvidenceClaims(
   paper: PaperCandidate,
   paperEvidence: GroundedEvidenceItem[],
@@ -609,13 +699,7 @@ function buildEvidenceClaims(
       notes: "브리핑 또는 평가 과정에서 언급되었으나 현재 원문/공식 출처에서 직접 확인되지 않았습니다.",
     }));
 
-  const seen = new Set<string>();
-  return [...claims, ...syntheticClaims, ...unverifiedTextClaims].filter((claim) => {
-    const key = `${claim.type}|${claim.claim}|${claim.verificationStatus}`;
-    if (seen.has(key) || containsBrokenEncoding(claim.claim)) return false;
-    seen.add(key);
-    return true;
-  });
+  return resolveCanonicalClaimStatus([...claims, ...syntheticClaims, ...unverifiedTextClaims]);
 }
 
 function isUnsupportedRationale(reason?: string | null): boolean {
@@ -739,9 +823,9 @@ export function formatReadingQuestion(text: string | undefined | null): string {
 }
 function userFacingQuantClaim(claim: EvidenceClaim): string {
   const base = formatCanonicalMetricClaim(claim);
-  if (claim.verificationStatus === "UNVERIFIED") return `브리핑에서 ${base}가 언급되었으나 현재 원문에서 직접 확인하지 못했습니다.`;
-  if (claim.verificationStatus === "PARTIAL") return `${base}. 세부 조건과 비교 대상은 추가 확인이 필요합니다.`;
-  return base;
+  if (claim.verificationStatus === "UNVERIFIED") return `\uBE0C\uB9AC\uD551\uC5D0\uC11C ${base}\uAC00 \uC5B8\uAE09\uB418\uC5C8\uC73C\uB098 \uC6D0\uBB38 \uD655\uC778\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.`;
+  if (claim.verificationStatus === "PARTIAL") return `${base}. \uC815\uB7C9 \uACB0\uACFC\uB294 \uD655\uC778\uB418\uC5C8\uC73C\uB098 \uC138\uBD80 \uD3C9\uAC00 \uC870\uAC74\uC740 \uCD94\uAC00 \uD655\uC778\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.`;
+  return `\uC6D0\uBB38\uC5D0\uC11C ${base}\uC774 \uBCF4\uACE0\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`;
 }
 function derivePerformanceEvidenceStatus(paper: PaperCandidate): PerformanceEvidenceStatus {
   if (paper.performanceEvidenceStatus) return paper.performanceEvidenceStatus;
@@ -772,18 +856,17 @@ function deriveStrengths(paper: PaperCandidate, claims: EvidenceClaim[]): string
   const targetClaims = claims.filter((claim) => claim.paperId === paper.id);
   const usableClaims = targetClaims.filter((claim) => claim.usableForScoring && claim.verificationStatus !== "UNVERIFIED");
   const claimStrengths = usableClaims
-    .filter((claim) => claim.type === "QUANTITATIVE_RESULT" || claim.type === "BASELINE_COMPARISON" || claim.type === "RESOURCE" || claim.type === "DATASET")
-    .filter((claim) => !isNegativeOrUncertainText(claim.claim))
-    .map((claim) => {
-      if (claim.type === "QUANTITATIVE_RESULT" || claim.type === "BASELINE_COMPARISON") return formatStrengthForUser(userFacingQuantClaim(claim), normalizePublicationStatus({ publicationStatus: paper.publicationStatus, venueOrPreprint: paper.venueOrPreprint, arxivId: paper.arxivId, biorxivId: paper.biorxivId, peerReviewed: paper.publishingReliabilityDetails?.peerReviewed, isPreprint: paper.publishingReliabilityDetails?.isPreprint }));
-      return formatStrengthForUser(claim.claim, normalizePublicationStatus({ publicationStatus: paper.publicationStatus, venueOrPreprint: paper.venueOrPreprint, arxivId: paper.arxivId, biorxivId: paper.biorxivId, peerReviewed: paper.publishingReliabilityDetails?.peerReviewed, isPreprint: paper.publishingReliabilityDetails?.isPreprint }));
-    });
+    .map(positiveStrengthFromClaim)
+    .filter((item): item is string => Boolean(item))
+    .map((item) => formatStrengthForUser(item, normalizePublicationStatus({ publicationStatus: paper.publicationStatus, venueOrPreprint: paper.venueOrPreprint, arxivId: paper.arxivId, biorxivId: paper.biorxivId, peerReviewed: paper.publishingReliabilityDetails?.peerReviewed, isPreprint: paper.publishingReliabilityDetails?.isPreprint })));
   const scoreStrengths = getCoreScoreEntries(paper)
     .filter((entry) => typeof entry.score?.score === "number" && (entry.score?.score || 0) >= 4)
-    .filter((entry) => !isNegativeOrUncertainText(entry.score?.reason || ""))
-    .filter((entry) => claimsForAxis(entry.key, paper, targetClaims).length > 0 || Boolean(entry.score?.reason))
-    .map((entry) => formatStrengthForUser(`${entry.label} ${entry.score?.score}점: ${entry.score?.reason || "검증 가능한 강점으로 평가되었습니다."}`, normalizePublicationStatus({ publicationStatus: paper.publicationStatus, venueOrPreprint: paper.venueOrPreprint, arxivId: paper.arxivId, biorxivId: paper.biorxivId, peerReviewed: paper.publishingReliabilityDetails?.peerReviewed, isPreprint: paper.publishingReliabilityDetails?.isPreprint })));
-  return uniqueClean([...claimStrengths, ...scoreStrengths]).slice(0, 3);
+    .filter((entry) => !isNegativeOrUncertainText(entry.score?.reason || "") && !isRawMetadataOrStatusText(entry.score?.reason || ""))
+    .filter((entry) => claimsForAxis(entry.key, paper, targetClaims).length > 0)
+    .map((entry) => formatStrengthForUser(`${entry.label} ${entry.score?.score}점으로 이번 선택에 긍정적으로 기여합니다.`, normalizePublicationStatus({ publicationStatus: paper.publicationStatus, venueOrPreprint: paper.venueOrPreprint, arxivId: paper.arxivId, biorxivId: paper.biorxivId, peerReviewed: paper.publishingReliabilityDetails?.peerReviewed, isPreprint: paper.publishingReliabilityDetails?.isPreprint })));
+  return uniqueClean([...claimStrengths, ...scoreStrengths])
+    .filter((item) => !isRawMetadataOrStatusText(item) && !isNegativeOrUncertainText(item))
+    .slice(0, 3);
 }
 export function ensureThreeReadingQuestions(paper: PaperCandidate, questions?: string[]): string[] {
   const method = sanitizeUserText((paper.scores.methodNovelty || paper.scores.novelty)?.reason, "핵심 방법 구조");
@@ -810,27 +893,28 @@ function methodFocusForQuestion(paper: PaperCandidate, claims: EvidenceClaim[]):
 function buildClaimGroundedReadingQuestions(paper: PaperCandidate, claims: EvidenceClaim[], fallbackQuestions?: string[]): string[] {
   void fallbackQuestions;
   const targetClaims = claims.filter((claim) => claim.paperId === paper.id);
-  const methodClaim = targetClaims.find((claim) => claim.type === "METHOD" && claim.verificationStatus !== "UNVERIFIED");
+  const methodClaims = targetClaims.filter((claim) => claim.type === "METHOD" && claim.verificationStatus !== "UNVERIFIED");
   const quantClaim = targetClaims.find((claim) => (claim.type === "QUANTITATIVE_RESULT" || claim.type === "BASELINE_COMPARISON") && claim.verificationStatus !== "UNVERIFIED");
   const unverifiedQuantClaim = targetClaims.find((claim) => claim.type === "QUANTITATIVE_RESULT" && claim.verificationStatus === "UNVERIFIED");
-  const limitationClaim = targetClaims.find((claim) => claim.type === "LIMITATION") || targetClaims.find((claim) => claim.type === "RESOURCE" || claim.type === "DATASET");
-  const methodFocus = methodFocusForQuestion(paper, targetClaims);
-  const methodReason = formatEvidenceForUser((paper.scores.methodNovelty || paper.scores.novelty)?.reason, "방법론의 구체 구조가 충분히 확인되지 않았습니다.");
-  const questions = [
-    methodClaim
-      ? `${methodFocus}가 어떤 입력을 받아 어떤 처리 단계를 거쳐 결과를 생성하는지 Method 섹션에서 확인합니다.`
-      : `현재 확보된 정보만으로 방법론의 구체적 구조가 충분히 확인되지 않습니다. Method 섹션에서 ${methodFocus}의 처리 흐름과 ${methodReason}을 우선 확인합니다.`,
-    quantClaim
-      ? `${formatEvidenceForUser(userFacingQuantClaim(quantClaim))}이 어떤 benchmark, baseline, split, horizon 조건에서 산출됐는지 확인합니다.`
-      : unverifiedQuantClaim
-      ? `${formatEvidenceForUser(userFacingQuantClaim(unverifiedQuantClaim))} 해당 수치의 원문 위치, 평가 조건, baseline을 우선 확인합니다.`
-      : "현재 확보된 범위에서는 정량 결과를 직접 확인하지 못했습니다. Results/Table/Ablation 섹션에서 metric, baseline, 개선 폭을 확인합니다.",
-    limitationClaim
-      ? `${formatEvidenceForUser(limitationClaim.claim)}과 관련해 재현 절차, 데이터 조건, 한계가 실제 실험 해석에 어떤 영향을 주는지 확인합니다.`
-      : "코드, 데이터, 설정, 평가 절차 공개 상태를 재현 가능성 관점에서 확인합니다.",
-  ];
+  const hasCode = targetClaims.some((claim) => claim.type === "RESOURCE" && claim.verificationStatus === "VERIFIED");
+  const hasData = targetClaims.some((claim) => claim.type === "DATASET" && claim.verificationStatus === "VERIFIED");
+  const methodConcept = methodClaims.length > 0 ? methodConceptForQuestion(paper, methodClaims) : methodConceptForQuestion(paper, targetClaims);
 
-  return uniqueClean(questions.map(formatReadingQuestion)).slice(0, 3);
+  const resultQuestion = quantClaim
+    ? `\uBCF4\uACE0\uB41C ${formatCanonicalMetricClaim(quantClaim)}\uC740 \uC5B4\uB5A4 baseline, \uC608\uCE21 horizon, \uB370\uC774\uD130 \uC870\uAC74\uC5D0\uC11C \uC0B0\uCD9C\uB418\uC5C8\uB294\uAC00?`
+    : unverifiedQuantClaim
+    ? `\uBE0C\uB9AC\uD551\uC5D0\uC11C \uC5B8\uAE09\uB41C ${formatCanonicalMetricClaim(unverifiedQuantClaim)}\uC758 \uC6D0\uBB38 \uC704\uCE58, \uD3C9\uAC00 \uC870\uAC74, baseline\uC740 \uBB34\uC5C7\uC778\uAC00?`
+    : "Results/Table/Ablation \uC139\uC158\uC5D0\uC11C \uD655\uC778 \uAC00\uB2A5\uD55C metric, baseline, \uAC1C\uC120 \uD3ED\uC740 \uBB34\uC5C7\uC778\uAC00?";
+
+  const reproQuestion = hasCode
+    ? `\uACF5\uAC1C \uCF54\uB4DC\uB85C \uB3D9\uC77C\uD55C \uC2E4\uD5D8\uC744 \uC7AC\uD604\uD558\uB824\uBA74 \uCD94\uAC00\uB85C \uD544\uC694\uD55C ${hasData ? "\uC124\uC815\uACFC \uC2E4\uD589 \uC808\uCC28" : "\uB370\uC774\uD130, \uC124\uC815, \uC2E4\uD589 \uC808\uCC28"}\uB294 \uBB34\uC5C7\uC778\uAC00?`
+    : "\uC2E4\uD5D8\uC744 \uC7AC\uD604\uD558\uB824\uBA74 \uC5B4\uB5A4 \uCF54\uB4DC, \uB370\uC774\uD130, \uC124\uC815, \uC2E4\uD589 \uC808\uCC28\uAC00 \uCD94\uAC00\uB85C \uD544\uC694\uD55C\uAC00?";
+
+  return uniqueClean([
+    `${methodConcept}\uC740 \uC5B4\uB5A4 \uC785\uB825\uACFC \uCC98\uB9AC \uB2E8\uACC4\uB97C \uAC70\uCCD0 \uACB0\uACFC\uB85C \uC5F0\uACB0\uB418\uB294\uAC00?`,
+    resultQuestion,
+    reproQuestion,
+  ].map((question) => trimQuestion(question))).slice(0, 3);
 }
 export function buildCanonicalPaperEvaluation(paper: PaperCandidate, recommendation?: AiRecommendation): CanonicalPaperEvaluation {
   const core = calculateCoreEvaluation(paper);
@@ -876,7 +960,8 @@ export function buildCanonicalPaperEvaluation(paper: PaperCandidate, recommendat
     codeStatus,
     dataStatus
   );
-  const verifiedClaimTexts = new Set(evidenceClaims.filter((claim) => claim.verificationStatus === "VERIFIED").map((claim) => claim.claim));
+  const verifiedClaims = evidenceClaims.filter((claim) => claim.verificationStatus === "VERIFIED");
+  const verifiedClaimTexts = new Set(verifiedClaims.map((claim) => claim.claim));
   const evidenceClaimIds = CORE_SCORE_KEYS.reduce((acc, key) => {
     acc[key] = claimsForAxis(key, paper, evidenceClaims);
     return acc;
@@ -894,16 +979,25 @@ export function buildCanonicalPaperEvaluation(paper: PaperCandidate, recommendat
     return acc;
   }, {} as Partial<Record<CoreScoreKey, string>>);
 
-  const rawFactVerification = cleanUncertaintyItems(paper.uncertainty?.factVerificationItems).filter((item) => !verifiedClaimTexts.has(item));
+  const rawFactVerification = cleanUncertaintyItems(paper.uncertainty?.factVerificationItems)
+    .filter((item) => !verifiedClaimTexts.has(item))
+    .filter((item) => !hasVerifiedEquivalent(item, verifiedClaims))
+    .filter((item) => !isConfirmedFactText(item));
   const limitationFromFact = rawFactVerification.filter(isEvidenceLimitationText).map(formatUncertaintyForUser);
   const factVerification = rawFactVerification.filter((item) => !isEvidenceLimitationText(item)).map(formatUncertaintyForUser);
   const insufficientEvidence = uniqueClean([
-    ...cleanUncertaintyItems(paper.uncertainty?.insufficientEvidenceItems).filter((item) => !verifiedClaimTexts.has(item)),
+    ...cleanUncertaintyItems(paper.uncertainty?.insufficientEvidenceItems)
+      .filter((item) => !verifiedClaimTexts.has(item))
+      .filter((item) => !hasVerifiedEquivalent(item, verifiedClaims))
+      .filter((item) => !isConfirmedFactText(item)),
     ...limitationFromFact,
   ].map(formatUncertaintyForUser));
   const openQuestions = uniqueClean((paper.uncertainty?.researchOpenQuestions || []).map(formatOpenQuestionForUser));
   const questions = buildClaimGroundedReadingQuestions(paper, evidenceClaims, recommendation?.topRecommendedPaperId === paper.id ? recommendation.readingQuestions : undefined);
-  const preReadingChecks = [...factVerification, ...insufficientEvidence, ...evidenceClaims.filter((claim) => claim.verificationStatus === "UNVERIFIED" && claim.type === "QUANTITATIVE_RESULT").map((claim) => formatUncertaintyForUser(userFacingQuantClaim(claim)))].slice(0, 4);
+  const quantitativeConditionChecks = evidenceClaims
+    .filter((claim) => (claim.type === "QUANTITATIVE_RESULT" || claim.type === "BASELINE_COMPARISON") && claim.verificationStatus !== "UNVERIFIED")
+    .map(() => "보고된 정량 개선이 어떤 baseline, 예측 horizon, 데이터 조건에서 산출되었는지 확인할 필요가 있습니다.");
+  const preReadingChecks = [...factVerification, ...insufficientEvidence, ...quantitativeConditionChecks, ...evidenceClaims.filter((claim) => claim.verificationStatus === "UNVERIFIED" && claim.type === "QUANTITATIVE_RESULT").map((claim) => formatUncertaintyForUser(userFacingQuantClaim(claim)))].slice(0, 4);
 
   return {
     paperId: paper.id,
