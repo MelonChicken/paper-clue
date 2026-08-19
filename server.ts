@@ -8,6 +8,7 @@ import { generateFallbackAnalysis } from "./server/fallbackAnalyzer";
 import { globalUsageStore } from "./server/observability/usageStore";
 import { getAIProvider } from "./server/pipeline/getProvider";
 import { AIProvider } from "./server/pipeline/providerInterface";
+import { analyzeBriefing } from "./server/api/analyzeBriefing";
 
 dotenv.config();
 
@@ -18,45 +19,12 @@ app.use(express.json({ limit: "10mb" }));
 
 // POST /api/analyze-briefing
 app.post("/api/analyze-briefing", async (req, res) => {
-  try {
-    const { briefingMarkdown, forceRefresh } = req.body;
+    const result = await analyzeBriefing(req.body);
 
-    if (!briefingMarkdown || typeof briefingMarkdown !== "string") {
-      return res.status(400).json({
-        success: false,
-        error: "?곌뎄 釉뚮━??Markdown ?띿뒪?멸? ?꾩슂?⑸땲??",
-      });
-    }
-
-    let provider: AIProvider | null = null;
-    try {
-      provider = getAIProvider();
-    } catch (err: any) {
-      console.warn("[Server Warning] AI Provider init failed:", err?.message);
-    }
-
-    if (!provider) {
-      console.warn("[Server Fallback] Running fallback analyzer due to missing AI Provider.");
-      const fallbackData = generateFallbackAnalysis(briefingMarkdown);
-      return res.json({ success: true, data: fallbackData });
-    }
-
-    const data = await runAnalysisPipeline(
-      provider,
-      briefingMarkdown,
-      Boolean(forceRefresh)
-    );
-    return res.json({ success: true, data });
-  } catch (err: any) {
-    console.error("Error analyzing briefing:", err);
-    return res.status(500).json({
-      success: false,
-      error: "?곌뎄 釉뚮━??遺꾩꽍 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.",
-      details: err?.message || String(err),
-    });
-  }
+    return res
+        .status(result.status)
+        .json(result.body);
 });
-
 // GET /api/usage-summary
 app.get("/api/usage-summary", async (req, res) => {
   try {

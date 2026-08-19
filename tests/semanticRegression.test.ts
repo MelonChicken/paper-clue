@@ -3,6 +3,7 @@ import { PaperCandidate, BriefingAnalysisResponse } from "../src/types.ts";
 import { computePaperEvaluationCoverage, getPaperEvaluationStatus } from "../src/utils/evaluationHelpers.ts";
 import { normalizePublicationStatus, labelPublicationStatus, containsBrokenEncoding, buildCanonicalPaperEvaluation, buildCanonicalRecommendationResult, CORE_SCORE_KEYS, buildCanonicalPaperEvaluations, formatEvidenceForUser, formatStrengthForUser, formatCanonicalMetricClaim, rankCanonicalPapers } from "../src/utils/paperSemantics.ts";
 import { generateReportMarkdown } from "../src/utils/markdownGenerator.ts";
+import { mergeDocumentAnalysisWithBriefing, mergeEvaluationWithBriefing, mergeMetadataWithBriefing, mergeResourcesWithBriefing } from "../server/pipeline/briefingEvidence.ts";
 
 const emptyEvidence = { paperText: [], externalSource: [], aiInterpretation: [] };
 const dim = (score: number | null, reason = "근거 확인", status: any = score === null ? "INSUFFICIENT_EVIDENCE" : "SCORED") => ({
@@ -758,5 +759,52 @@ describe("Semantic consistency regression tests", () => {
     }, {}, "epiflow");
     for (const strength of canonical.interpretation.strengths.slice(0, 3)) expect(md).toContain(formatStrengthForUser(strength, canonical.verification.publicationStatus));
     for (const question of canonical.readingGuide.questions.slice(0, 3)) expect(md).toContain(formatEvidenceForUser(question));
+  });
+  it("Source Fidelity 1: EpiFlow briefing metric remains forecast coverage, not accuracy", () => {
+    const draft: any = { id: "epiflow", rawTitle: "EpiFlow", authors: [], year: "2026", venue: "arXiv preprint", snippet: "EpiFlow reports forecast coverage 약 20 percentage points 개선 over baseline.", claimedMetrics: [{ name: "forecast coverage", value: "20", unit: "percentage points", dataset: null, sourceLocation: "briefing" }], mentionedCodeUrl: null, mentionedDataUrl: null };
+    const doc = mergeDocumentAnalysisWithBriefing({ paperId: "epiflow", performed: true, reason: "search failed", method: "Method N/A", datasets: [], metrics: [], baselines: [], quantitativeResults: ["현재 확보한 요약 정보에서는 직접 추출되지 않음"], sotaClaim: "", evidence: [] } as any, draft);
+    expect(doc.quantitativeResults.join("\n")).toContain("forecast coverage");
+    expect(doc.quantitativeResults.join("\n")).toContain("20 percentage points");
+    expect(doc.quantitativeResults.join("\n")).not.toMatch(/accuracy|정확도/i);
+  });
+
+  it("Source Fidelity 2/3/4: Bundibugyo briefing method, 42.6 metric, and code-not-found survive merge", () => {
+    const draft: any = {
+      id: "bundibugyo",
+      rawTitle: "Bundibugyo risk ranking",
+      authors: [],
+      year: "2026",
+      venue: "preprint",
+      snippet: "Bayesian hierarchical discrete-time hazard model. 4개 모델 비교: no connectivity, road-distance, gravity score, incidence-weighted force of infection. top-10 hit rate 약 42.6%. GitHub: 이번 스캔에서 논문 전용 repository 확인하지 못함.",
+      claimedMetrics: [{ name: "top-10 hit rate", value: "42.6", unit: "%", dataset: null, sourceLocation: "briefing" }],
+      mentionedCodeUrl: null,
+      mentionedDataUrl: null,
+    };
+    const doc = mergeDocumentAnalysisWithBriefing({ paperId: "bundibugyo", performed: true, reason: "official source unavailable", method: "Method N/A", datasets: [], metrics: [], baselines: [], quantitativeResults: ["Quantitative Results: N/A"], sotaClaim: "", evidence: [] } as any, draft);
+    const resources = mergeResourcesWithBriefing({ paperId: "bundibugyo", codeStatus: "CODE_AVAILABLE_VERIFIED", codeUrl: "https://github.com/wrong/repo", dataStatus: "UNKNOWN", dataUrl: null, checkpointStatus: "NOT_FOUND", documentationStatus: "LOW", executionVerification: "NOT_PERFORMED", reproducibilityLevel: "NOT_VERIFIED", reproducibilityAssessment: { codeStatus: "CODE_AVAILABLE_VERIFIED", dataStatus: "UNKNOWN", checkpointStatus: "NOT_FOUND", documentationStatus: "LOW", executionVerification: "NOT_PERFORMED", level: "NOT_VERIFIED", score: 1, reason: "" }, evidence: [] } as any, draft);
+    expect(doc.method).toMatch(/Bayesian hierarchical discrete-time hazard model|incidence-weighted force of infection/);
+    expect(doc.quantitativeResults.join("\n")).toContain("top-10 hit rate");
+    expect(doc.quantitativeResults.join("\n")).toContain("42.6");
+    expect(resources.codeStatus).not.toBe("CODE_AVAILABLE_VERIFIED");
+    expect(resources.codeUrl).toBeNull();
+  });
+
+  it("Source Fidelity 5: EpiSewer briefing method evidence reaches evaluation", () => {
+    const draft: any = { id: "episewer", rawTitle: "Real-time estimation with EpiSewer", authors: [], year: "2026", venue: "preprint", snippet: "raw concentration + flow data -> Bayesian semi-mechanistic model -> infection dynamics / shedding / noise / non-detect / outlier modeling -> Rt / growth rate / latent infection dynamics / 14-day forecast", claimedMetrics: [], mentionedCodeUrl: "https://github.com/example/episewer", mentionedDataUrl: null };
+    const evaluation = mergeEvaluationWithBriefing({ paperId: "episewer", scores: { performance: dim(null), novelty: dim(null, "방법론 세부 구조 확인 필요"), trendImportance: dim(null), academicSignificance: dim(null), practicalValue: dim(null), reproducibility: dim(null) }, uncertainty: { factVerificationItems: [], insufficientEvidenceItems: [], researchOpenQuestions: [] }, verificationBadges: {} as any, verificationScope: {} as any, overallBadgeStatus: "PARTIAL_INFO_UNVERIFIED" } as any, draft);
+    expect(evaluation.scores.novelty.score).not.toBeNull();
+    expect(evaluation.scores.novelty.evidence.aiInterpretation.some((item: any) => item.claim.includes("Bayesian semi-mechanistic") || item.claim.includes("raw concentration"))).toBe(true);
+  });
+
+  it("Source Fidelity 6/7: KDD briefing publication, code, data, and method are not downgraded by search failure", () => {
+    const draft: any = { id: "kdd", rawTitle: "LLM simulation", authors: [], year: "2026", venue: "KDD '26", snippet: "Peer-reviewed conference paper. KDD '26. ACM DOI https://doi.org/10.1145/123. GitHub repository https://github.com/example/kdd-sim. census-derived synthetic population. LLM-generated decision bank.", claimedMetrics: [], mentionedCodeUrl: "https://github.com/example/kdd-sim", mentionedDataUrl: null };
+    const metadata = mergeMetadataWithBriefing({ paperId: "kdd", rawMention: draft.rawTitle, entityType: "PAPER", canonicalTitle: draft.rawTitle, normalizedTitle: draft.rawTitle, authors: [], year: "2026", venueOrPreprint: "Preprint", doi: null, arxivId: null, biorxivId: null, url: null, canonicalUrl: null, identityStatus: "IDENTITY_VERIFIED", matchConfidence: 0.8, matchReason: "", publicationStatus: "PREPRINT", peerReviewed: false, isPreprint: true, versionInfo: { publicationStatus: "PREPRINT" }, crossVerificationStatus: "SINGLE_SOURCE", publishingReliabilityDetails: { peerReviewed: false, isPreprint: true, scoreReason: "" }, evidence: [] } as any, draft);
+    const resources = mergeResourcesWithBriefing({ paperId: "kdd", codeStatus: "NOT_FOUND_AFTER_RETRIES", codeUrl: null, dataStatus: "UNKNOWN", dataUrl: null, checkpointStatus: "NOT_FOUND", documentationStatus: "LOW", executionVerification: "NOT_PERFORMED", reproducibilityLevel: "NOT_VERIFIED", reproducibilityAssessment: { codeStatus: "NOT_FOUND_AFTER_RETRIES", dataStatus: "UNKNOWN", checkpointStatus: "NOT_FOUND", documentationStatus: "LOW", executionVerification: "NOT_PERFORMED", level: "NOT_VERIFIED", score: 1, reason: "" }, evidence: [] } as any, draft);
+    const doc = mergeDocumentAnalysisWithBriefing({ paperId: "kdd", performed: true, reason: "search failed", method: "Method N/A", datasets: [], metrics: [], baselines: [], quantitativeResults: [], sotaClaim: "", evidence: [] } as any, draft);
+    expect(metadata.peerReviewed).toBe(true);
+    expect(metadata.publicationStatus).toBe("PEER_REVIEWED");
+    expect(resources.codeStatus).toBe("REPOSITORY_FOUND");
+    expect(resources.dataStatus).not.toBe("UNKNOWN");
+    expect(doc.method).toMatch(/census-derived synthetic population|LLM-generated decision bank/);
   });});
 

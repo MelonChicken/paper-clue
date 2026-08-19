@@ -1,4 +1,4 @@
-﻿import { BriefingAnalysisResponse, PaperCandidate, SupportingResource } from "../../src/types";
+import { BriefingAnalysisResponse, PaperCandidate, SupportingResource } from "../../src/types";
 import { parseBriefing } from "./briefingParser";
 import { verifyPaperMetadata, PaperSearchContext } from "./metadataVerifier";
 import { verifyPaperResources } from "./resourceVerifier";
@@ -18,6 +18,7 @@ import { AIProvider } from "./providerInterface";
 import { getAIProvider } from "./getProvider";
 import { determineRecommendationStatus } from "../../src/utils/evaluationHelpers";
 import { calculateCoreEvaluation } from "../../src/utils/paperSemantics";
+import { mergeDocumentAnalysisWithBriefing, mergeEvaluationWithBriefing, mergeMetadataWithBriefing, mergeResourcesWithBriefing } from "./briefingEvidence";
 
 export async function runAnalysisPipeline(
   providerInput: AIProvider | null | undefined,
@@ -87,7 +88,8 @@ export async function runAnalysisPipeline(
         total,
         draft.rawTitle
       );
-      const metadata = await verifyPaperMetadata(provider, draft, context, searchContextMap);
+      let metadata = await verifyPaperMetadata(provider, draft, context, searchContextMap);
+      metadata = mergeMetadataWithBriefing(metadata, draft);
 
       // Step 3: Resource Verification
       notify(
@@ -97,7 +99,7 @@ export async function runAnalysisPipeline(
         total,
         metadata.normalizedTitle
       );
-      const resources = await verifyPaperResources(
+      let resources = await verifyPaperResources(
         provider,
         metadata,
         context,
@@ -173,6 +175,8 @@ export async function runAnalysisPipeline(
           draft.snippet
         );
 
+        docAnalysis = mergeDocumentAnalysisWithBriefing(docAnalysis, draft);
+
         if (docAnalysis.performed) {
           executedDocAnalyses++;
         }
@@ -204,7 +208,7 @@ export async function runAnalysisPipeline(
         total,
         metadata.normalizedTitle
       );
-      const evaluation = await evaluatePaper(
+      let evaluation = await evaluatePaper(
         provider,
         metadata,
         resources,
@@ -213,6 +217,7 @@ export async function runAnalysisPipeline(
         context
       );
 
+      evaluation = mergeEvaluationWithBriefing(evaluation, draft);
       const coreEvaluation = calculateCoreEvaluation(evaluation.scores);
       const validScoresCount = coreEvaluation.validScoresCount;
       const totalDimensions = coreEvaluation.totalDimensions;

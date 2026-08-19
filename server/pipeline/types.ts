@@ -1,4 +1,4 @@
-﻿import {
+import {
   BriefingAnalysisResponse,
   BriefingExtraction,
   PaperCandidate,
@@ -49,7 +49,7 @@ export interface ExtractedPaperDraft {
   year: string;
   venue: string;
   snippet: string;
-  claimedMetrics?: string[];
+  claimedMetrics?: Array<string | { name: string; value: string; unit?: string | null; dataset?: string | null; sourceLocation?: string | null }>;
   mentionedCodeUrl?: string | null;
   mentionedDataUrl?: string | null;
 }

@@ -450,6 +450,7 @@ function classifyClaimType(text: string, sourceLocation?: string | null): Eviden
 
 function claimSourceType(item: GroundedEvidenceItem): EvidenceClaimSourceType {
   const sourceText = `${item.sourceTitle || ""} ${item.sourceLocation || ""} ${item.sourceType || ""}`.toLowerCase();
+  if (/briefing|브리핑/.test(sourceText)) return "BRIEFING";
   if (/table|표/.test(sourceText)) return "PAPER_TABLE";
   if (/abstract|초록/.test(sourceText)) return "PAPER_ABSTRACT";
   if (/github|repository|readme/.test(sourceText)) return "OFFICIAL_REPOSITORY";
@@ -468,6 +469,17 @@ function claimVerificationStatus(item: GroundedEvidenceItem): EvidenceClaimVerif
 function parseMetricFromClaim(claim: string): EvidenceClaim["metric"] | undefined {
   const text = claim.replace(/\s+/g, " ").trim();
   if (isAbsenceOfQuantitativeResult(text) || isExcludedNumericOnlyContext(text)) return undefined;
+
+  const top10Match = text.match(/top-?10 hit rate[^\d]*(\d+(?:\.\d+)?)\s*(%|percent)?/i);
+  if (top10Match) {
+    return {
+      name: "top-10 hit rate",
+      value: top10Match[1],
+      unit: top10Match[2] || "%",
+      direction: /improv|increase|gain|향상|개선|증가/i.test(text) ? "INCREASE" : "NONE",
+      comparisonTarget: /baseline/i.test(text) ? "baseline" : null,
+    };
+  }
 
   const metricPatterns = [
     /forecast coverage/i,
@@ -493,7 +505,7 @@ function parseMetricFromClaim(claim: string): EvidenceClaim["metric"] | undefine
   const changeContext = /improv|increase|decrease|gain|lower|reduce|향상|개선|증가|감소|baseline|대비|percentage point/i.test(text);
   if (!metricName && !changeContext) return undefined;
 
-  const valueMatch = text.match(/(?:\+|~|약|approximately|around)?\s*(\d+(?:\.\d+)?)\s*(percentage points|percentage point|pp|%|percent|퍼센트포인트|%p)?/i);
+  const valueMatch = text.match(/(?:by|of|=|:|\+|~|약|approximately|around)?\s*(\d+(?:\.\d+)?)\s*(percentage points|percentage point|pp|%|percent|퍼센트포인트|%p)?/i);
   if (!valueMatch) return undefined;
 
   const comparisonTarget = /baseline/i.test(text) ? "baseline" : /대비/.test(text) ? "비교 대상" : null;
