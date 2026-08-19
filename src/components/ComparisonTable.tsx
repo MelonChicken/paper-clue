@@ -1,8 +1,8 @@
 ﻿import React from "react";
-import { PaperCandidate } from "../types";
+import { PaperCandidate } from "../types.js";
 import { Table, BookmarkCheck, Check, HelpCircle } from "lucide-react";
-import { sortCandidatesByEvaluation } from "../utils/evaluationHelpers";
-import { CORE_SCORE_KEYS, CORE_SCORE_LABELS, CoreScoreKey, buildCanonicalPaperEvaluation } from "../utils/paperSemantics";
+import { sortCandidatesByEvaluation } from "../utils/evaluationHelpers.js";
+import { CORE_SCORE_KEYS, CORE_SCORE_LABELS, CoreScoreKey, buildCanonicalPaperEvaluation } from "../utils/paperSemantics.js";
 
 interface ComparisonTableProps {
   candidates: PaperCandidate[];

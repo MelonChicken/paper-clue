@@ -1,8 +1,8 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import { PROMPT_VERSIONS, SCHEMA_VERSION, ROUTE_VERSION } from "../config/versions";
-import { PipelineContext } from "./context";
+import { PROMPT_VERSIONS, SCHEMA_VERSION, ROUTE_VERSION } from "../config/versions.js";
+import { PipelineContext } from "./context.js";
 
 export type CacheNamespace =
   | "briefing-parse"

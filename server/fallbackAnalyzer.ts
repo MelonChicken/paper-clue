@@ -1,4 +1,4 @@
-﻿import { BriefingAnalysisResponse, PaperCandidate, AiRecommendation } from "../src/types";
+﻿import { BriefingAnalysisResponse, PaperCandidate, AiRecommendation } from "../src/types.js";
 
 const BANNED_TITLE_PATTERNS = [
   "?듭떖 臾몄젣",

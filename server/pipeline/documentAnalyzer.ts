@@ -1,11 +1,11 @@
 ﻿import { z } from "zod";
-import { VerifiedMetadataResult, VerifiedResourcesResult, DocumentAnalysisResult } from "./types";
-import { getRouteConfig } from "../config/routingConfig";
-import { logPipelineCall } from "../observability/pipelineLogger";
-import { PipelineContext } from "./context";
-import { PROMPT_VERSIONS, SCHEMA_VERSION, ROUTE_VERSION } from "../config/versions";
-import { persistentCache, generatePaperCacheKey, CACHE_TTL } from "./cacheManager";
-import { AIProvider } from "./providerInterface";
+import { VerifiedMetadataResult, VerifiedResourcesResult, DocumentAnalysisResult } from "./types.js";
+import { getRouteConfig } from "../config/routingConfig.js";
+import { logPipelineCall } from "../observability/pipelineLogger.js";
+import { PipelineContext } from "./context.js";
+import { PROMPT_VERSIONS, SCHEMA_VERSION, ROUTE_VERSION } from "../config/versions.js";
+import { persistentCache, generatePaperCacheKey, CACHE_TTL } from "./cacheManager.js";
+import { AIProvider } from "./providerInterface.js";
 
 export function shouldRunDocumentAnalysis(
   metadata: VerifiedMetadataResult,

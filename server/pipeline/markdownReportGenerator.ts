@@ -1,4 +1,4 @@
-import { BriefingAnalysisResponse, DimensionScore } from "../../src/types";
+import { BriefingAnalysisResponse, DimensionScore } from "../../src/types.js";
 
 function formatDimensionScore(dimScore?: DimensionScore): string {
   if (!dimScore) return "산출 유예 (검증 미비)";

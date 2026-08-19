@@ -1,4 +1,4 @@
-import { EntityType, IdentityStatus } from "../../src/types";
+import { EntityType, IdentityStatus } from "../../src/types.js";
 
 export interface CandidateResolutionInput {
   rawMention?: string;

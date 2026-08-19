@@ -1,5 +1,5 @@
-import { GroundedEvidenceItem } from "../../src/types";
-import { DocumentAnalysisResult, ExtractedPaperDraft, PaperEvaluationResult, VerifiedMetadataResult, VerifiedResourcesResult } from "./types";
+import { GroundedEvidenceItem } from "../../src/types.js";
+import { DocumentAnalysisResult, ExtractedPaperDraft, PaperEvaluationResult, VerifiedMetadataResult, VerifiedResourcesResult } from "./types.js";
 
 function textOf(draft: ExtractedPaperDraft): string {
   return `${draft.rawTitle || ""}\n${draft.venue || ""}\n${draft.snippet || ""}\n${(draft.claimedMetrics || []).map((m: any) => typeof m === "string" ? m : `${m.name || ""} ${m.value || ""} ${m.unit || ""} ${m.dataset || ""}`).join("\n")}`;

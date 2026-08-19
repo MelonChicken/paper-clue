@@ -1,14 +1,14 @@
 ﻿import { z } from "zod";
-import { ExtractedPaperDraft, VerifiedMetadataResult } from "./types";
-import { getRouteConfig } from "../config/routingConfig";
-import { logPipelineCall } from "../observability/pipelineLogger";
-import { PipelineContext } from "./context";
-import { PROMPT_VERSIONS, SCHEMA_VERSION, ROUTE_VERSION } from "../config/versions";
-import { persistentCache, generatePaperCacheKey, CACHE_TTL } from "./cacheManager";
-import { AIProvider } from "./providerInterface";
-import { resolveCandidateIdentity, validateCanonicalIdentity, calculateFuzzyScore, normalizeTitle } from "./candidateResolver";
-import { EntityType, IdentityStatus, SourceType, VerificationLevel } from "../../src/types";
-import { normalizePublicationStatus } from "../../src/utils/paperSemantics";
+import { ExtractedPaperDraft, VerifiedMetadataResult } from "./types.js";
+import { getRouteConfig } from "../config/routingConfig.js";
+import { logPipelineCall } from "../observability/pipelineLogger.js";
+import { PipelineContext } from "./context.js";
+import { PROMPT_VERSIONS, SCHEMA_VERSION, ROUTE_VERSION } from "../config/versions.js";
+import { persistentCache, generatePaperCacheKey, CACHE_TTL } from "./cacheManager.js";
+import { AIProvider } from "./providerInterface.js";
+import { resolveCandidateIdentity, validateCanonicalIdentity, calculateFuzzyScore, normalizeTitle } from "./candidateResolver.js";
+import { EntityType, IdentityStatus, SourceType, VerificationLevel } from "../../src/types.js";
+import { normalizePublicationStatus } from "../../src/utils/paperSemantics.js";
 
 export interface PaperSearchContext {
   paperId: string;

@@ -4,8 +4,8 @@ import {
   StructuredGenerationRequest,
   StructuredGenerationResult,
   ProviderUsage,
-} from "../providerInterface";
-import { ProviderError, classifyGeminiError } from "../errorUtils";
+} from "../providerInterface.js";
+import { ProviderError, classifyGeminiError } from "../errorUtils.js";
 
 export class GeminiProvider implements AIProvider {
   name = "GEMINI" as const;

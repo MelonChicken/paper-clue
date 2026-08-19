@@ -3,20 +3,20 @@ import {
   BriefingAnalysisResponse,
   CandidateUserStatus,
   PaperCandidate,
-} from "./types";
-import { Navbar } from "./components/Navbar";
-import { FlowStep } from "./components/StepperNav";
-import { StartSection } from "./components/StartSection";
-import { AnalysisLoading } from "./components/AnalysisLoading";
-import { ResearchOverview } from "./components/ResearchOverview";
-import { CandidateComparison } from "./components/CandidateComparison";
-import { CandidateCards } from "./components/CandidateCards";
-import { FinalRecommendation } from "./components/FinalRecommendation";
-import { ComparisonTable } from "./components/ComparisonTable";
-import { EvidenceModal } from "./components/EvidenceModal";
-import { MarkdownExportModal } from "./components/MarkdownExportModal";
-import { SAMPLE_RESEARCH_BRIEFING } from "./data/sampleBriefing";
-import { getDefaultComparedCandidateIds } from "./utils/evaluationHelpers";
+} from "./types.js";
+import { Navbar } from "./components/Navbar.js";
+import { FlowStep } from "./components/StepperNav.js";
+import { StartSection } from "./components/StartSection.js";
+import { AnalysisLoading } from "./components/AnalysisLoading.js";
+import { ResearchOverview } from "./components/ResearchOverview.js";
+import { CandidateComparison } from "./components/CandidateComparison.js";
+import { CandidateCards } from "./components/CandidateCards.js";
+import { FinalRecommendation } from "./components/FinalRecommendation.js";
+import { ComparisonTable } from "./components/ComparisonTable.js";
+import { EvidenceModal } from "./components/EvidenceModal.js";
+import { MarkdownExportModal } from "./components/MarkdownExportModal.js";
+import { SAMPLE_RESEARCH_BRIEFING } from "./data/sampleBriefing.js";
+import { getDefaultComparedCandidateIds } from "./utils/evaluationHelpers.js";
 import { AlertCircle, RotateCcw } from "lucide-react";
 
 export default function App() {

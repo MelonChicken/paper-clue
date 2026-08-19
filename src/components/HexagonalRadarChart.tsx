@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { PaperCandidate } from "../types";
+import { PaperCandidate } from "../types.js";
 import {
   ResponsiveContainer,
   RadarChart,

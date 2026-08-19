@@ -1,5 +1,5 @@
-import { PipelineContext, computeBriefingHash } from "./context";
-import { PaperCandidate, AiRecommendation } from "../../src/types";
+import { PipelineContext, computeBriefingHash } from "./context.js";
+import { PaperCandidate, AiRecommendation } from "../../src/types.js";
 
 export class PipelineIntegrityError extends Error {
   public code = "PIPELINE_INTEGRITY_ERROR";

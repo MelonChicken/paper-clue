@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { PaperCandidate, CandidateUserStatus } from "../types";
+import { PaperCandidate, CandidateUserStatus } from "../types.js";
 import {
   ExternalLink,
   Code,
@@ -21,8 +21,8 @@ import {
   getRadarEligibility,
   formatEnumKorean,
   sortCandidatesByEvaluation,
-} from "../utils/evaluationHelpers";
-import { CORE_SCORE_KEYS, CORE_SCORE_LABELS, buildCanonicalPaperEvaluation, rankCanonicalPapers } from "../utils/paperSemantics";
+} from "../utils/evaluationHelpers.js";
+import { CORE_SCORE_KEYS, CORE_SCORE_LABELS, buildCanonicalPaperEvaluation, rankCanonicalPapers } from "../utils/paperSemantics.js";
 
 interface CandidateCardsProps {
   candidates: PaperCandidate[];

@@ -1,7 +1,7 @@
 ﻿import React from "react";
-import { AiRecommendation, PaperCandidate } from "../types";
+import { AiRecommendation, PaperCandidate } from "../types.js";
 import { BookmarkCheck, Compass, CheckCircle2, AlertTriangle, HelpCircle, BookOpen, Check, FileSearch } from "lucide-react";
-import { getPaperEvaluationStatus } from "../utils/evaluationHelpers";
+import { getPaperEvaluationStatus } from "../utils/evaluationHelpers.js";
 
 interface AiRecommendationBannerProps {
   recommendation: AiRecommendation;

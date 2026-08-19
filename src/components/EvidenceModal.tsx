@@ -1,8 +1,8 @@
 ﻿import React from "react";
-import { PaperCandidate, GroundedEvidence, GroundedEvidenceItem } from "../types";
+import { PaperCandidate, GroundedEvidence, GroundedEvidenceItem } from "../types.js";
 import { X, BookOpen, Globe, FileText, ExternalLink, ShieldAlert, CheckCircle, AlertTriangle, HelpCircle, GitCompare } from "lucide-react";
-import { formatEnumKorean, getPaperEvaluationStatus } from "../utils/evaluationHelpers";
-import { CORE_SCORE_LABELS, CoreScoreKey, buildCanonicalPaperEvaluation, getCoreScore } from "../utils/paperSemantics";
+import { formatEnumKorean, getPaperEvaluationStatus } from "../utils/evaluationHelpers.js";
+import { CORE_SCORE_LABELS, CoreScoreKey, buildCanonicalPaperEvaluation, getCoreScore } from "../utils/paperSemantics.js";
 
 interface EvidenceModalProps {
   paper: PaperCandidate | null;

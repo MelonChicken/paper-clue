@@ -9,7 +9,7 @@ import {
   Lightbulb,
   Bookmark,
 } from "lucide-react";
-import { SAMPLE_RESEARCH_BRIEFING } from "../data/sampleBriefing";
+import { SAMPLE_RESEARCH_BRIEFING } from "../data/sampleBriefing.js";
 
 interface StartSectionProps {
   onStartAnalysis: (markdown: string) => void;

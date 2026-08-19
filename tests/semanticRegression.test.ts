@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { PaperCandidate, BriefingAnalysisResponse } from "../src/types.ts";
-import { computePaperEvaluationCoverage, getPaperEvaluationStatus } from "../src/utils/evaluationHelpers.ts";
-import { normalizePublicationStatus, labelPublicationStatus, containsBrokenEncoding, buildCanonicalPaperEvaluation, buildCanonicalRecommendationResult, CORE_SCORE_KEYS, buildCanonicalPaperEvaluations, formatEvidenceForUser, formatStrengthForUser, formatCanonicalMetricClaim, rankCanonicalPapers } from "../src/utils/paperSemantics.ts";
-import { generateReportMarkdown } from "../src/utils/markdownGenerator.ts";
-import { mergeDocumentAnalysisWithBriefing, mergeEvaluationWithBriefing, mergeMetadataWithBriefing, mergeResourcesWithBriefing } from "../server/pipeline/briefingEvidence.ts";
+import { PaperCandidate, BriefingAnalysisResponse } from "../src/types.js";
+import { computePaperEvaluationCoverage, getPaperEvaluationStatus } from "../src/utils/evaluationHelpers.js";
+import { normalizePublicationStatus, labelPublicationStatus, containsBrokenEncoding, buildCanonicalPaperEvaluation, buildCanonicalRecommendationResult, CORE_SCORE_KEYS, buildCanonicalPaperEvaluations, formatEvidenceForUser, formatStrengthForUser, formatCanonicalMetricClaim, rankCanonicalPapers } from "../src/utils/paperSemantics.js";
+import { generateReportMarkdown } from "../src/utils/markdownGenerator.js";
+import { mergeDocumentAnalysisWithBriefing, mergeEvaluationWithBriefing, mergeMetadataWithBriefing, mergeResourcesWithBriefing } from "../server/pipeline/briefingEvidence.js";
 
 const emptyEvidence = { paperText: [], externalSource: [], aiInterpretation: [] };
 const dim = (score: number | null, reason = "근거 확인", status: any = score === null ? "INSUFFICIENT_EVIDENCE" : "SCORED") => ({

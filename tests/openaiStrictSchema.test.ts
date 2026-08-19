@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { assertOpenAIStrictSchemaCompatible } from "../server/pipeline/schemaValidator";
-import { briefingParserSchema } from "../server/pipeline/briefingParser";
-import { metadataVerifierSchema } from "../server/pipeline/metadataVerifier";
-import { resourceVerifierSchema } from "../server/pipeline/resourceVerifier";
-import { documentAnalyzerSchema } from "../server/pipeline/documentAnalyzer";
-import { comparisonFinderSchema } from "../server/pipeline/comparisonFinder";
-import { paperEvaluatorSchema } from "../server/pipeline/paperEvaluator";
-import { recommendationEngineSchema } from "../server/pipeline/recommendationEngine";
-import { parseBriefing } from "../server/pipeline/briefingParser";
-import { createPipelineContext } from "../server/pipeline/context";
-import { SCHEMA_VERSION } from "../server/config/versions";
+import { assertOpenAIStrictSchemaCompatible } from "../server/pipeline/schemaValidator.js";
+import { briefingParserSchema } from "../server/pipeline/briefingParser.js";
+import { metadataVerifierSchema } from "../server/pipeline/metadataVerifier.js";
+import { resourceVerifierSchema } from "../server/pipeline/resourceVerifier.js";
+import { documentAnalyzerSchema } from "../server/pipeline/documentAnalyzer.js";
+import { comparisonFinderSchema } from "../server/pipeline/comparisonFinder.js";
+import { paperEvaluatorSchema } from "../server/pipeline/paperEvaluator.js";
+import { recommendationEngineSchema } from "../server/pipeline/recommendationEngine.js";
+import { parseBriefing } from "../server/pipeline/briefingParser.js";
+import { createPipelineContext } from "../server/pipeline/context.js";
+import { SCHEMA_VERSION } from "../server/config/versions.js";
 import { z } from "zod";
 
 describe("OpenAI Strict Schema & Structured Outputs Compatibility Tests", () => {

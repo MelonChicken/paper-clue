@@ -1,6 +1,6 @@
 ﻿import React from "react";
-import { BriefingAnalysisResponse } from "../types";
-import { buildCanonicalPaperEvaluations } from "../utils/paperSemantics";
+import { BriefingAnalysisResponse } from "../types.js";
+import { buildCanonicalPaperEvaluations } from "../utils/paperSemantics.js";
 import {
   FileText,
   ShieldCheck,

@@ -9,7 +9,7 @@ import {
   PaperCandidate,
   PerformanceEvidenceStatus,
   PublicationStatus,
-} from "../types";
+} from "../types.js";
 
 export const CORE_SCORE_KEYS = [
   "topicRelevance",

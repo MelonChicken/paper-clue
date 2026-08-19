@@ -1,18 +1,18 @@
 ﻿import { z } from "zod";
 import crypto from "crypto";
-import { PaperCandidate, AiRecommendation } from "../../src/types";
-import { getRouteConfig } from "../config/routingConfig";
-import { logPipelineCall } from "../observability/pipelineLogger";
-import { PipelineContext } from "./context";
-import { PROMPT_VERSIONS, SCHEMA_VERSION, ROUTE_VERSION } from "../config/versions";
+import { PaperCandidate, AiRecommendation } from "../../src/types.js";
+import { getRouteConfig } from "../config/routingConfig.js";
+import { logPipelineCall } from "../observability/pipelineLogger.js";
+import { PipelineContext } from "./context.js";
+import { PROMPT_VERSIONS, SCHEMA_VERSION, ROUTE_VERSION } from "../config/versions.js";
 import {
   persistentCache,
   generateRecommendationCacheKey,
   CACHE_TTL,
-} from "./cacheManager";
-import { AIProvider } from "./providerInterface";
-import { determineRecommendationStatus, getPaperEvaluationStatus } from "../../src/utils/evaluationHelpers";
-import { ensureThreeReadingQuestions, sanitizeUserText } from "../../src/utils/paperSemantics";
+} from "./cacheManager.js";
+import { AIProvider } from "./providerInterface.js";
+import { determineRecommendationStatus, getPaperEvaluationStatus } from "../../src/utils/evaluationHelpers.js";
+import { ensureThreeReadingQuestions, sanitizeUserText } from "../../src/utils/paperSemantics.js";
 
 export const recommendationEngineSchema = z.object({
   topRecommendedPaperId: z.string().nullable(),

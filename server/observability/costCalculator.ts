@@ -1,9 +1,9 @@
-import { TokenUsageRecord, SearchUsageRecord, CostEstimate } from "./types";
+import { TokenUsageRecord, SearchUsageRecord, CostEstimate } from "./types.js";
 import {
   PROVIDER_MODEL_PRICING,
   WEB_SEARCH_CALL_COST_USD,
   ProviderModelPricing,
-} from "../config/providerPricing";
+} from "../config/providerPricing.js";
 
 export function calculateEstimatedCost(
   provider: "OPENAI" | "GEMINI",

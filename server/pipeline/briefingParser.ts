@@ -1,15 +1,15 @@
 import { z } from "zod";
-import { BriefingParserResult } from "./types";
-import { getRouteConfig } from "../config/routingConfig";
-import { logPipelineCall } from "../observability/pipelineLogger";
-import { PipelineContext } from "./context";
+import { BriefingParserResult } from "./types.js";
+import { getRouteConfig } from "../config/routingConfig.js";
+import { logPipelineCall } from "../observability/pipelineLogger.js";
+import { PipelineContext } from "./context.js";
 import {
   persistentCache,
   generateBriefingParseCacheKey,
   CACHE_TTL,
-} from "./cacheManager";
-import { PROMPT_VERSIONS, SCHEMA_VERSION, ROUTE_VERSION } from "../config/versions";
-import { AIProvider } from "./providerInterface";
+} from "./cacheManager.js";
+import { PROMPT_VERSIONS, SCHEMA_VERSION, ROUTE_VERSION } from "../config/versions.js";
+import { AIProvider } from "./providerInterface.js";
 
 export const ClaimedMetricSchema = z.object({
   name: z.string(),

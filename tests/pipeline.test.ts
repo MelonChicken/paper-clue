@@ -1,11 +1,11 @@
 ﻿import { describe, it, expect } from "vitest";
-import { getRouteConfig, isProEscalationEnabled } from "../server/config/routingConfig.ts";
-import { calculatePublishingReliability, calculateRecencyScore } from "../server/pipeline/scoringUtils.ts";
-import { classifyGeminiError } from "../server/pipeline/errorUtils.ts";
-import { generateBriefingParseCacheKey, generatePaperCacheKey } from "../server/pipeline/cacheManager.ts";
-import { generateFallbackAnalysis } from "../server/fallbackAnalyzer.ts";
-import { resolveCandidateIdentity, validateCanonicalIdentity } from "../server/pipeline/candidateResolver.ts";
-import { computePaperEvaluationCoverage, isCandidateEligibleForRecommendation, determineRecommendationStatus } from "../src/utils/evaluationHelpers.ts";
+import { getRouteConfig, isProEscalationEnabled } from "../server/config/routingConfig.js";
+import { calculatePublishingReliability, calculateRecencyScore } from "../server/pipeline/scoringUtils.js";
+import { classifyGeminiError } from "../server/pipeline/errorUtils.js";
+import { generateBriefingParseCacheKey, generatePaperCacheKey } from "../server/pipeline/cacheManager.js";
+import { generateFallbackAnalysis } from "../server/fallbackAnalyzer.js";
+import { resolveCandidateIdentity, validateCanonicalIdentity } from "../server/pipeline/candidateResolver.js";
+import { computePaperEvaluationCoverage, isCandidateEligibleForRecommendation, determineRecommendationStatus } from "../src/utils/evaluationHelpers.js";
 
 describe("Pipeline Architecture & Routing Tests", () => {
   it("Scenario A: Default routing uses default model config", () => {
@@ -236,8 +236,8 @@ describe("Candidate Identity Resolution & Evidence Semantics Regression Tests", 
 });
 
 
-import { runAnalysisPipeline } from "../server/pipeline/orchestrator.ts";
-import { AIProvider, StructuredGenerationRequest } from "../server/pipeline/providerInterface.ts";
+import { runAnalysisPipeline } from "../server/pipeline/orchestrator.js";
+import { AIProvider, StructuredGenerationRequest } from "../server/pipeline/providerInterface.js";
 
 const usage = { inputTokens: null, cachedInputTokens: null, outputTokens: null, totalTokens: null, webSearchCalls: null };
 

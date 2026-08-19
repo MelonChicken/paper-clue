@@ -1,5 +1,5 @@
 ﻿import React from "react";
-import { PaperCandidate } from "../types";
+import { PaperCandidate } from "../types.js";
 import { UserCheck, BookmarkCheck, CheckCircle2, Info } from "lucide-react";
 
 interface UserSelectionPanelProps {

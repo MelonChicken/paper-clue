@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { StageName } from "../observability/types";
+import { StageName } from "../observability/types.js";
 
 export interface StructuredGenerationRequest<T = any> {
   stage: StageName;

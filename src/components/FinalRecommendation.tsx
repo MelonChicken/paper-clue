@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { AiRecommendation, PaperCandidate } from "../types";
+import { AiRecommendation, PaperCandidate } from "../types.js";
 import { BookmarkCheck, CheckCircle2, ArrowRight, Copy, Check, FileDown, BookOpen, Info, ListChecks } from "lucide-react";
-import { buildCanonicalPaperEvaluation, buildCanonicalRecommendationResult, sanitizeUserText, formatEvidenceForUser, formatStrengthForUser } from "../utils/paperSemantics";
+import { buildCanonicalPaperEvaluation, buildCanonicalRecommendationResult, sanitizeUserText, formatEvidenceForUser, formatStrengthForUser } from "../utils/paperSemantics.js";
 
 interface FinalRecommendationProps {
   recommendation: AiRecommendation;

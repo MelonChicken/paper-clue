@@ -20,7 +20,7 @@ import {
   MetadataConflictInfo,
   PaperRole,
   SupportingResource,
-} from "../../src/types";
+} from "../../src/types.js";
 
 export interface PipelineProgressUpdate {
   stage:

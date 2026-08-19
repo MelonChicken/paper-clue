@@ -1,5 +1,5 @@
 import React from "react";
-import { BriefingExtraction } from "../types";
+import { BriefingExtraction } from "../types.js";
 import { Database, Github, FileText, AlertTriangle, CheckCircle2, ListFilter } from "lucide-react";
 
 interface ExtractionSummaryCardProps {

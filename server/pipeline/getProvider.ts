@@ -1,6 +1,6 @@
-import { AIProvider } from "./providerInterface";
-import { OpenAIProvider } from "./providers/openaiProvider";
-import { GeminiProvider } from "./providers/geminiProvider";
+import { AIProvider } from "./providerInterface.js";
+import { OpenAIProvider } from "./providers/openaiProvider.js";
+import { GeminiProvider } from "./providers/geminiProvider.js";
 
 export function getAIProvider(overrideProvider?: "OPENAI" | "GEMINI"): AIProvider {
   const providerName = (

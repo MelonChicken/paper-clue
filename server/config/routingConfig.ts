@@ -1,4 +1,4 @@
-﻿import { StageName } from "../observability/types";
+﻿import { StageName } from "../observability/types.js";
 
 export interface ModelRoute {
   stage: StageName;

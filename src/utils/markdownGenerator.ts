@@ -1,4 +1,4 @@
-import { BriefingAnalysisResponse, CandidateUserStatus, GroundedEvidenceItem } from "../types";
+import { BriefingAnalysisResponse, CandidateUserStatus, GroundedEvidenceItem } from "../types.js";
 import {
   CORE_SCORE_KEYS,
   CORE_SCORE_LABELS,
@@ -14,7 +14,7 @@ import {
   formatOpenQuestionForUser,
   formatCanonicalMetricClaim,
   getCanonicalRanking,
-} from "./paperSemantics";
+} from "./paperSemantics.js";
 
 function sanitizeCell(val: string | number | undefined | null): string {
   if (val === undefined || val === null || val === "") return "-";

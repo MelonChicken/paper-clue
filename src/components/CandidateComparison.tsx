@@ -1,5 +1,5 @@
 ﻿import React from "react";
-import { PaperCandidate } from "../types";
+import { PaperCandidate } from "../types.js";
 import {
   ResponsiveContainer,
   ScatterChart,
@@ -22,7 +22,7 @@ import {
   getRadarEligibility,
   getScatterEligibility,
   sortCandidatesByEvaluation,
-} from "../utils/evaluationHelpers";
+} from "../utils/evaluationHelpers.js";
 
 interface CandidateComparisonProps {
   candidates: PaperCandidate[];

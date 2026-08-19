@@ -1,6 +1,6 @@
 ﻿import React, { useState } from "react";
-import { BriefingAnalysisResponse, CandidateUserStatus } from "../types";
-import { generateReportMarkdown } from "../utils/markdownGenerator";
+import { BriefingAnalysisResponse, CandidateUserStatus } from "../types.js";
+import { generateReportMarkdown } from "../utils/markdownGenerator.js";
 import { X, Copy, Check, Download, FileText } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";

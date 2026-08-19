@@ -1,12 +1,12 @@
 ﻿import { z } from "zod";
-import { VerifiedMetadataResult, VerifiedResourcesResult } from "./types";
-import { getRouteConfig } from "../config/routingConfig";
-import { logPipelineCall } from "../observability/pipelineLogger";
-import { PaperSearchContext } from "./metadataVerifier";
-import { PipelineContext } from "./context";
-import { PROMPT_VERSIONS, SCHEMA_VERSION, ROUTE_VERSION } from "../config/versions";
-import { persistentCache, generatePaperCacheKey, CACHE_TTL } from "./cacheManager";
-import { AIProvider } from "./providerInterface";
+import { VerifiedMetadataResult, VerifiedResourcesResult } from "./types.js";
+import { getRouteConfig } from "../config/routingConfig.js";
+import { logPipelineCall } from "../observability/pipelineLogger.js";
+import { PaperSearchContext } from "./metadataVerifier.js";
+import { PipelineContext } from "./context.js";
+import { PROMPT_VERSIONS, SCHEMA_VERSION, ROUTE_VERSION } from "../config/versions.js";
+import { persistentCache, generatePaperCacheKey, CACHE_TTL } from "./cacheManager.js";
+import { AIProvider } from "./providerInterface.js";
 
 export const resourceVerifierSchema = z.object({
   codeStatus: z.enum([

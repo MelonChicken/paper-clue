@@ -1,4 +1,4 @@
-import { PipelineCallLog, AnalysisRunUsageSummary } from "./types";
+import { PipelineCallLog, AnalysisRunUsageSummary } from "./types.js";
 
 export interface PipelineUsageStore {
   saveCallLog(log: PipelineCallLog): Promise<void>;

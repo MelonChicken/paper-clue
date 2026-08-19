@@ -17,7 +17,7 @@ import {
   ShieldCheck,
   Cpu
 } from "lucide-react";
-import { AnalysisRunUsageSummary, PipelineCallLog } from "../../server/observability/types";
+import { AnalysisRunUsageSummary, PipelineCallLog } from "../../server/observability/types.js";
 
 interface DeveloperUsagePanelProps {
   currentUsageSummary?: AnalysisRunUsageSummary | null;

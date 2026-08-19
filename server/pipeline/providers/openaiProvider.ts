@@ -6,9 +6,9 @@ import {
   StructuredGenerationResult,
   ProviderUsage,
   WebSearchResultItem,
-} from "../providerInterface";
-import { ProviderError, classifyProviderError } from "../errorUtils";
-import { assertOpenAIStrictSchemaCompatible } from "../schemaValidator";
+} from "../providerInterface.js";
+import { ProviderError, classifyProviderError } from "../errorUtils.js";
+import { assertOpenAIStrictSchemaCompatible } from "../schemaValidator.js";
 
 const ALLOWED_SEARCH_STAGES = new Set([
   "METADATA_VERIFIER",

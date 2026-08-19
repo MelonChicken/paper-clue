@@ -1,4 +1,4 @@
-import { analyzeBriefing } from "../server/api/analyzeBriefing";
+import { analyzeBriefing } from "../server/api/analyzeBriefing.js";
 
 export async function POST(request: Request) {
     try {

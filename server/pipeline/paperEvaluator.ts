@@ -5,7 +5,7 @@ import {
   DocumentAnalysisResult,
   ComparisonFinderResult,
   PaperEvaluationResult,
-} from "./types";
+} from "./types.js";
 import {
   DimensionScore,
   ScoreStatus,
@@ -13,13 +13,13 @@ import {
   VerificationScope,
   SourceType,
   VerificationLevel,
-} from "../../src/types";
-import { getRouteConfig } from "../config/routingConfig";
-import { logPipelineCall } from "../observability/pipelineLogger";
-import { PipelineContext } from "./context";
-import { PROMPT_VERSIONS, SCHEMA_VERSION, ROUTE_VERSION } from "../config/versions";
-import { persistentCache, generatePaperCacheKey, CACHE_TTL } from "./cacheManager";
-import { AIProvider } from "./providerInterface";
+} from "../../src/types.js";
+import { getRouteConfig } from "../config/routingConfig.js";
+import { logPipelineCall } from "../observability/pipelineLogger.js";
+import { PipelineContext } from "./context.js";
+import { PROMPT_VERSIONS, SCHEMA_VERSION, ROUTE_VERSION } from "../config/versions.js";
+import { persistentCache, generatePaperCacheKey, CACHE_TTL } from "./cacheManager.js";
+import { AIProvider } from "./providerInterface.js";
 
 const evidenceClaimSchema = z.object({
   claimText: z.string(),

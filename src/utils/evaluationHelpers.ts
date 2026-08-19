@@ -1,5 +1,5 @@
-import { PaperCandidate, DimensionScore, EntityType, IdentityStatus, VerificationLevel, RecommendationStatus } from "../types";
-import { CORE_SCORE_KEYS, buildCanonicalPaperEvaluation, calculateCoreEvaluation, getCoreScore, labelStatus, rankCanonicalPapers } from "./paperSemantics";
+import { PaperCandidate, DimensionScore, EntityType, IdentityStatus, VerificationLevel, RecommendationStatus } from "../types.js";
+import { CORE_SCORE_KEYS, buildCanonicalPaperEvaluation, calculateCoreEvaluation, getCoreScore, labelStatus, rankCanonicalPapers } from "./paperSemantics.js";
 
 export type EvaluationStatusType = "COMPLETE" | "PARTIAL" | "HOLD";
 

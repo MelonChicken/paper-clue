@@ -1,7 +1,7 @@
-import { runAnalysisPipeline } from "../pipeline/orchestrator";
-import { generateFallbackAnalysis } from "../fallbackAnalyzer";
-import { getAIProvider } from "../pipeline/getProvider";
-import { AIProvider } from "../pipeline/providerInterface";
+import { runAnalysisPipeline } from "../pipeline/orchestrator.js";
+import { generateFallbackAnalysis } from "../fallbackAnalyzer.js";
+import { getAIProvider } from "../pipeline/getProvider.js";
+import type { AIProvider } from "../pipeline/providerInterface.js";
 
 export async function analyzeBriefing(body: any) {
     try {

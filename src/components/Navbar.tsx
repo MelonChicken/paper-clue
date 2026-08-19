@@ -1,6 +1,6 @@
 ﻿import React from "react";
 import { Bookmark, BookOpen, FileText, RotateCcw } from "lucide-react";
-import { StepperNav, FlowStep } from "./StepperNav";
+import { StepperNav, FlowStep } from "./StepperNav.js";
 
 interface NavbarProps {
   onLoadSample: () => void;

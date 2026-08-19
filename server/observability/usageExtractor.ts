@@ -1,4 +1,4 @@
-import { TokenUsageRecord, SearchUsageRecord } from "./types";
+import { TokenUsageRecord, SearchUsageRecord } from "./types.js";
 import { GenerateContentResponse } from "@google/genai";
 
 export function extractTokenUsage(response?: GenerateContentResponse | null): TokenUsageRecord {

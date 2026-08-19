@@ -1,24 +1,24 @@
-import { BriefingAnalysisResponse, PaperCandidate, SupportingResource } from "../../src/types";
-import { parseBriefing } from "./briefingParser";
-import { verifyPaperMetadata, PaperSearchContext } from "./metadataVerifier";
-import { verifyPaperResources } from "./resourceVerifier";
-import { analyzePaperDocument } from "./documentAnalyzer";
-import { findComparisonStudies } from "./comparisonFinder";
-import { evaluatePaper } from "./paperEvaluator";
-import { generateRecommendation } from "./recommendationEngine";
-import { ProgressCallback } from "./types";
-import { generateFallbackAnalysis } from "../fallbackAnalyzer";
-import { PipelineCallLog } from "../observability/types";
-import { globalUsageStore } from "../observability/usageStore";
-import { aggregateAnalysisRunUsage } from "../observability/usageAggregator";
-import { STANDARD_ANALYSIS_BUDGET } from "../config/routingConfig";
-import { createPipelineContext } from "./context";
-import { verifyPipelineIntegrity } from "./integrityVerifier";
-import { AIProvider } from "./providerInterface";
-import { getAIProvider } from "./getProvider";
-import { determineRecommendationStatus } from "../../src/utils/evaluationHelpers";
-import { calculateCoreEvaluation } from "../../src/utils/paperSemantics";
-import { mergeDocumentAnalysisWithBriefing, mergeEvaluationWithBriefing, mergeMetadataWithBriefing, mergeResourcesWithBriefing } from "./briefingEvidence";
+import { BriefingAnalysisResponse, PaperCandidate, SupportingResource } from "../../src/types.js";
+import { parseBriefing } from "./briefingParser.js";
+import { verifyPaperMetadata, PaperSearchContext } from "./metadataVerifier.js";
+import { verifyPaperResources } from "./resourceVerifier.js";
+import { analyzePaperDocument } from "./documentAnalyzer.js";
+import { findComparisonStudies } from "./comparisonFinder.js";
+import { evaluatePaper } from "./paperEvaluator.js";
+import { generateRecommendation } from "./recommendationEngine.js";
+import { ProgressCallback } from "./types.js";
+import { generateFallbackAnalysis } from "../fallbackAnalyzer.js";
+import { PipelineCallLog } from "../observability/types.js";
+import { globalUsageStore } from "../observability/usageStore.js";
+import { aggregateAnalysisRunUsage } from "../observability/usageAggregator.js";
+import { STANDARD_ANALYSIS_BUDGET } from "../config/routingConfig.js";
+import { createPipelineContext } from "./context.js";
+import { verifyPipelineIntegrity } from "./integrityVerifier.js";
+import { AIProvider } from "./providerInterface.js";
+import { getAIProvider } from "./getProvider.js";
+import { determineRecommendationStatus } from "../../src/utils/evaluationHelpers.js";
+import { calculateCoreEvaluation } from "../../src/utils/paperSemantics.js";
+import { mergeDocumentAnalysisWithBriefing, mergeEvaluationWithBriefing, mergeMetadataWithBriefing, mergeResourcesWithBriefing } from "./briefingEvidence.js";
 
 export async function runAnalysisPipeline(
   providerInput: AIProvider | null | undefined,
