@@ -1,6 +1,5 @@
-import { z } from "zod";
+﻿import { z } from "zod";
 import { VerifiedMetadataResult, VerifiedResourcesResult, DocumentAnalysisResult } from "./types";
-import { AnalysisMode } from "../observability/types";
 import { getRouteConfig } from "../config/routingConfig";
 import { logPipelineCall } from "../observability/pipelineLogger";
 import { PipelineContext } from "./context";
@@ -11,7 +10,6 @@ import { AIProvider } from "./providerInterface";
 export function shouldRunDocumentAnalysis(
   metadata: VerifiedMetadataResult,
   resources: VerifiedResourcesResult,
-  analysisMode: AnalysisMode,
   executedDocCount: number,
   maxDocCount: number,
   briefingSnippet?: string
@@ -23,17 +21,7 @@ export function shouldRunDocumentAnalysis(
     return { run: false, reasons: ["Document analysis budget/limit reached"], analysisTargets: [] };
   }
 
-  if (analysisMode === "QUICK") {
-    return { run: false, reasons: ["Quick mode skips document analysis"], analysisTargets: [] };
-  }
-
-  if (analysisMode === "DEEP") {
-    reasons.push("Deep mode specifies full document analysis for all candidate papers");
-    analysisTargets.push("PERFORMANCE_TABLE", "BASELINES", "CODE_AVAILABILITY", "ABLATIONS", "LIMITATIONS");
-    return { run: true, reasons, analysisTargets };
-  }
-
-  reasons.push("Standard mode document analysis for quantitative performance and baseline extraction");
+  reasons.push("표준 검증 파이프라인: 정량 성능, baseline, ablation, limitation 근거 추출");
   analysisTargets.push("PERFORMANCE_TABLE", "BASELINES", "METRICS", "ABLATIONS", "LIMITATIONS", "CODE_AVAILABILITY");
 
   return {
@@ -88,7 +76,6 @@ export async function analyzePaperDocument(
   const { run, reasons, analysisTargets } = shouldRunDocumentAnalysis(
     metadata,
     resources,
-    context.analysisMode,
     executedDocCount,
     maxDocCount,
     briefingSnippet
@@ -176,10 +163,10 @@ You are an expert scientific paper document analyzer.
 Inspect the paper's official text, HTML page, or preprint PDF to extract deep technical details focused on targets: ${analysisTargets.join(", ")}.
 
 CRITICAL PROVENANCE & NO-HALLUCINATION RULES:
-1. STRICT GROUNDING: Extract ONLY datasets, metrics, baselines, and quantitative numbers that explicitly appear in the provided text or metadata snippet.
+1. STRICT GROUNDING: Extract ONLY datasets, metrics, baselines, and quantitative numbers that explicitly appear in official paper text, HTML, PDF, tables, or the provided metadata snippet.
 2. DO NOT ASSERT ABSENCE FROM BRIEFINGS: If quantitative metrics, baselines, or datasets do NOT appear in the provided brief snippet or metadata, state:
-   "스니펫/요약 정보에서 직접 추출되지 않음 (원문 전체 검증 필요)"
-   Do NOT declare or state "No quantitative results provided in the paper" or "No benchmark comparisons exist" unless the source text explicitly asserts that no experiments were performed!
+   "현재 확보한 요약 정보에서는 직접 추출되지 않음(원문 전체 검증 필요)"
+   Before saying quantitative evidence is unavailable, inspect sections/headings equivalent to Experiments, Experimental Results, Results, Evaluation, Benchmark, Comparison, Comparison with State-of-the-Art, Ablation, Ablation Study, Analysis, Quantitative Results, and Table. Do NOT declare or state "No quantitative results provided in the paper" or "No benchmark comparisons exist" unless the official source text explicitly asserts that no experiments were performed!
 3. NO CROSS-PAPER POLLUTION: Do NOT invent or import benchmark datasets (e.g. NEVER mention UCF-101, HMDB-51, FID, Fly-vs-Fly, etc.) unless they explicitly appear in the provided text.
 4. PROVENANCE FOR CLAIMS: For every metric, dataset, or performance claim extracted into \`quantitativeResults\`, add an item in \`quantitativeClaims\` with the exact \`sourceSection\` and \`sourceQuoteOrEvidence\`.
 5. If a quantitative metric cannot be supported by an explicit quote or section in the source text, mark its \`evidenceStatus\` as "UNVERIFIED".
@@ -190,7 +177,7 @@ EXTRACT:
 3. Benchmark Datasets used
 4. Metrics (e.g. ADE, FDE, mAP, Top-1 Acc)
 5. Baselines compared against
-6. Quantitative Results (or "스니펫/요약 정보에서 직접 추출되지 않음" if missing from snippet)
+6. Quantitative Results. If missing from the snippet, say "현재 확보한 요약 정보에서는 직접 추출되지 않음(원문 전체 검증 필요)".
 7. Quantitative Claims (with source section, quote, and verification status)
 8. SOTA Claims
 9. Ablation Studies & Findings
@@ -223,7 +210,7 @@ Trigger Reasons: ${reasons.join(", ")}
       userPrompt,
       schema: documentAnalyzerSchema,
       schemaName: "documentAnalyzer",
-      webSearch: false,
+      webSearch: true,
       temperature: route.temperature,
       maxTokens: route.maxOutputTokens,
       context,
@@ -252,10 +239,10 @@ Trigger Reasons: ${reasons.join(", ")}
     const claims = parsed.quantitativeClaims || [];
     const verifiedEvidenceItems = (parsed.evidence || []).map((e) => ({
       evidenceType: "PAPER" as const,
-      sourceTitle: e.sourceTitle || `${metadata.normalizedTitle} 원문`,
+      sourceTitle: e.sourceTitle || `${metadata.normalizedTitle} 논문 원문`,
       sourceUrl: e.sourceUrl || metadata.url || null,
       sourceLocation: e.sourceLocation || "Section 4 / Table 1",
-      claim: e.claim || "원문 정량 수치 및 방법론 추출",
+      claim: e.claim || "논문 정량 수치 및 방법 근거 추출",
       verificationStatus: (["DIRECTLY_VERIFIED", "PARTIALLY_VERIFIED", "NOT_VERIFIED"].includes(e.verificationStatus)
         ? e.verificationStatus
         : "DIRECTLY_VERIFIED") as any,
@@ -276,12 +263,9 @@ Trigger Reasons: ${reasons.join(", ")}
     });
 
     const sanitizeQuantPhrase = (str: string) => {
-      if (
-        /no quantitative|no benchmark|no performance|not provided in the paper|are reported in the paper|실험 결과가 (제공되지|없음|보고되지)|성능 결과가 (제공되지|없음|보고되지)|정량 수치가 (제공되지|없음|보고되지)/i.test(
-          str
-        )
-      ) {
-        return "현재 확보된 요약/스니펫에서는 정량 결과를 직접 확인하지 못했으며, 원문 상세 검증이 필요함";
+      const absencePattern = /no quantitative|no benchmark|no performance|not provided in the paper|are reported in the paper/i;
+      if (absencePattern.test(str)) {
+        return "현재 확보한 원문/스니펫에서는 정량 결과를 충분히 확인하지 못했으며, Results 또는 Table 추가 확인이 필요합니다.";
       }
       return str;
     };
@@ -289,7 +273,7 @@ Trigger Reasons: ${reasons.join(", ")}
     const sanitizedQuantResults = (parsed.quantitativeResults || []).map(sanitizeQuantPhrase);
 
     if (sanitizedQuantResults.length === 0) {
-      sanitizedQuantResults.push("현재 확보된 요약/스니펫에서는 정량 결과를 직접 확인하지 못했으며, 원문 상세 검증이 필요함");
+      sanitizedQuantResults.push("현재 확보한 원문/스니펫에서는 정량 결과를 충분히 확인하지 못했으며, Results 또는 Table 추가 확인이 필요합니다.");
     }
 
     const docResult: DocumentAnalysisResult = {
@@ -297,15 +281,15 @@ Trigger Reasons: ${reasons.join(", ")}
       performed: true,
       reason: reasons.join("; "),
       researchQuestion: parsed.researchQuestion || `${metadata.normalizedTitle}의 핵심 연구 질문`,
-      method: parsed.method || "제안 아키텍처 및 알고리즘",
+      method: parsed.method || "제안 방법 추가 확인 필요",
       datasets: parsed.datasets || [],
       metrics: parsed.metrics || [],
       baselines: parsed.baselines || [],
       quantitativeResults: sanitizedQuantResults,
-      sotaClaim: parsed.sotaClaim || "성능 주장 확인 중",
+      sotaClaim: parsed.sotaClaim || "성능 주장 추가 확인 필요",
       ablations: parsed.ablations || [],
       limitations: parsed.limitations || [],
-      codeDataAvailabilityNotes: parsed.codeDataAvailabilityNotes || "원문 자원 공개 구문 분석 완료",
+      codeDataAvailabilityNotes: parsed.codeDataAvailabilityNotes || "논문 자원 공개 구문 분석 완료",
       evidence: verifiedEvidenceItems,
     };
 
@@ -352,17 +336,24 @@ Trigger Reasons: ${reasons.join(", ")}
     return {
       paperId: metadata.paperId,
       performed: true,
-      reason: `원문 정밀 분석 보존: ${reasons.join("; ")}`,
-      researchQuestion: `${metadata.normalizedTitle}의 핵심 문제 해결`,
-      method: "제안 방법론 원문 분석",
+      reason: `논문 원문 분석 보존: ${reasons.join("; ")}`,
+      researchQuestion: `${metadata.normalizedTitle}???듭떖 臾몄젣 ?닿껐`,
+      method: "제안 방법 추가 확인 필요",
       datasets: [],
       metrics: [],
       baselines: [],
       quantitativeResults: [],
-      sotaClaim: "원문 성능 검증 완료",
+      sotaClaim: "성능 주장 추가 확인 필요",
       ablations: [],
       limitations: [],
       evidence: [],
     };
   }
 }
+
+
+
+
+
+
+

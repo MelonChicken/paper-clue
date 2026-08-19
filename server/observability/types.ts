@@ -1,4 +1,4 @@
-export type PipelineStage =
+﻿export type PipelineStage =
   | "BRIEFING_PARSER"
   | "METADATA_VERIFIER"
   | "RESOURCE_VERIFIER"
@@ -10,7 +10,7 @@ export type PipelineStage =
 
 export type StageName = PipelineStage;
 
-export type AnalysisMode = "QUICK" | "STANDARD" | "DEEP";
+export type AnalysisMode = "STANDARD";
 
 export type MeasurementStatus = "MEASURED" | "ESTIMATED" | "UNAVAILABLE";
 
@@ -141,3 +141,4 @@ export interface AnalysisBudget {
   maxEstimatedCostUsd: number;
   maxDocumentAnalyses: number;
 }
+

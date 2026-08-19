@@ -177,7 +177,7 @@ describe("Candidate Identity Resolution & Evidence Semantics Regression Tests", 
   });
 
   it("Recommendation Eligibility & Coverage Test: Enforces 60% threshold and verified identity", () => {
-    // Valid candidate with 5/6 scored dimensions (83%)
+    // Valid candidate with 4/5 canonical scored dimensions (80%); performance is separate evidence metadata.
     const validCandidate: any = {
       id: "paper-1",
       entityType: "PAPER",
@@ -194,7 +194,7 @@ describe("Candidate Identity Resolution & Evidence Semantics Regression Tests", 
     };
 
     const coverage = computePaperEvaluationCoverage(validCandidate.scores);
-    expect(coverage.evaluationCoverage).toBe(83);
+    expect(coverage.evaluationCoverage).toBe(80);
     expect(isCandidateEligibleForRecommendation(validCandidate)).toBe(true);
 
     // Ineligible candidate: coverage < 60% (e.g. 2/6 = 33%)
@@ -320,7 +320,7 @@ describe("Final stabilization production regression tests", () => {
   });
 
   it("Regression Tests E/F/G: production pipeline separates resources, preserves paper evidence, and avoids generic domain contamination", async () => {
-    const result = await runAnalysisPipeline(makeStabilizationMockProvider(), "# VLA Weekly Regression", true, "STANDARD");
+    const result = await runAnalysisPipeline(makeStabilizationMockProvider(), "# VLA Weekly Regression", true);
 
     const reflex = result.supportingResources?.find((r) => r.name.includes("Reflex"));
     expect(reflex?.verificationStatus).toBe("CONFLICTING");
@@ -395,3 +395,5 @@ describe("Cache replay recommendation semantics regression tests", () => {
     expect(isCandidateEligibleForRecommendation(candidate)).toBe(false);
   });
 });
+
+

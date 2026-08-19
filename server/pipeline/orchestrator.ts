@@ -1,4 +1,4 @@
-import { BriefingAnalysisResponse, PaperCandidate, SupportingResource } from "../../src/types";
+﻿import { BriefingAnalysisResponse, PaperCandidate, SupportingResource } from "../../src/types";
 import { parseBriefing } from "./briefingParser";
 import { verifyPaperMetadata, PaperSearchContext } from "./metadataVerifier";
 import { verifyPaperResources } from "./resourceVerifier";
@@ -8,21 +8,21 @@ import { evaluatePaper } from "./paperEvaluator";
 import { generateRecommendation } from "./recommendationEngine";
 import { ProgressCallback } from "./types";
 import { generateFallbackAnalysis } from "../fallbackAnalyzer";
-import { AnalysisMode, PipelineCallLog } from "../observability/types";
+import { PipelineCallLog } from "../observability/types";
 import { globalUsageStore } from "../observability/usageStore";
 import { aggregateAnalysisRunUsage } from "../observability/usageAggregator";
-import { MODE_BUDGETS } from "../config/routingConfig";
+import { STANDARD_ANALYSIS_BUDGET } from "../config/routingConfig";
 import { createPipelineContext } from "./context";
 import { verifyPipelineIntegrity } from "./integrityVerifier";
 import { AIProvider } from "./providerInterface";
 import { getAIProvider } from "./getProvider";
 import { determineRecommendationStatus } from "../../src/utils/evaluationHelpers";
+import { calculateCoreEvaluation } from "../../src/utils/paperSemantics";
 
 export async function runAnalysisPipeline(
   providerInput: AIProvider | null | undefined,
   briefingMarkdown: string,
   forceRefresh = false,
-  analysisMode: AnalysisMode = "STANDARD",
   onProgress?: ProgressCallback
 ): Promise<BriefingAnalysisResponse> {
   const provider = providerInput || getAIProvider();
@@ -30,12 +30,11 @@ export async function runAnalysisPipeline(
   const context = createPipelineContext(
     `run_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     briefingMarkdown,
-    analysisMode,
     forceRefresh
   );
   const analysisRunId = context.analysisRunId;
   const startedAtIso = new Date().toISOString();
-  const budget = MODE_BUDGETS[analysisMode];
+  const budget = STANDARD_ANALYSIS_BUDGET;
 
   const notify = (
     stage: Parameters<ProgressCallback>[0]["stage"],
@@ -55,13 +54,13 @@ export async function runAnalysisPipeline(
 
   try {
     // Step 1: Parse Briefing Structure
-    notify("briefingParser", "브리???�싱: 주간 ?�구 브리??구조 �??�문 ?�보 추출 �?..");
+    notify("briefingParser", "브리핑 파싱: 주간 연구 브리핑 구조와 논문 후보를 추출 중...");
     const parsedBriefing = await parseBriefing(provider, briefingMarkdown, context, 5);
     const paperDrafts = parsedBriefing.papers || [];
 
     notify(
       "briefingParser",
-      `브리???�싱 ?�료: �?${paperDrafts.length}?�의 ?�문 ?�보 ?�출`,
+      `브리핑 파싱 완료: 총 ${paperDrafts.length}편의 논문 후보 추출`,
       0,
       paperDrafts.length
     );
@@ -83,7 +82,7 @@ export async function runAnalysisPipeline(
       // Step 2: Metadata Verification
       notify(
         "metadataVerifier",
-        `?�문 메�??�이??검�? "${draft.rawTitle}" 교차검�?�?..`,
+        `논문 메타데이터 검증: "${draft.rawTitle}" 교차검증 중...`,
         paperNum,
         total,
         draft.rawTitle
@@ -93,7 +92,7 @@ export async function runAnalysisPipeline(
       // Step 3: Resource Verification
       notify(
         "resourceVerifier",
-        `코드·?�이?�·체?�포?�트 ?�색: "${metadata.normalizedTitle}" 공식 ?�?�소 조사 �?..`,
+        `肄붾뱶쨌?곗씠?걔룹껜?ы룷?명듃 ?먯깋: "${metadata.normalizedTitle}" 怨듭떇 ??μ냼 議곗궗 以?..`,
         paperNum,
         total,
         metadata.normalizedTitle
@@ -136,12 +135,12 @@ export async function runAnalysisPipeline(
         docAnalysis = {
           performed: false,
           paperId: metadata.paperId,
-          reason: "?�문 ?�원 미확??NOT_FOUND)?�로 분석 ?�외",
-          method: "?�원 미확??NOT_FOUND)?�로 분석 ?�외",
+          reason: "논문 신원 미확정(NOT_FOUND)으로 분석에서 제외",
+          method: "논문 신원 미확정(NOT_FOUND)으로 분석에서 제외",
           datasets: [],
           metrics: [],
-          quantitativeResults: ["?�문 ?�원 미확?�으�??�량 ?�능 분석 ?�외"],
-          sotaClaim: "?�문 ?�원 미확?�으�?SOTA 비교 분석 ?�외",
+          quantitativeResults: ["논문 신원 미확정으로 정량 성능 분석 제외"],
+          sotaClaim: "논문 신원 미확정으로 SOTA 비교 분석 제외",
         };
 
         comparison = {
@@ -151,15 +150,15 @@ export async function runAnalysisPipeline(
             nearTaskComparisonStudies: [],
             contextualRelatedStudies: [],
             representativePriorStudies: [],
-            sotaStatus: "?��? ?�외",
-            summary: "?�문 ?�원???�정?��? ?�아 비교 분석 ?�?�에???�외?�었?�니??",
+            sotaStatus: "평가 제외",
+            summary: "논문 신원이 확정되지 않아 비교 분석 대상에서 제외되었습니다.",
           },
         };
       } else {
         // Step 4: Conditional Document Analysis
         notify(
           "documentAnalyzer",
-          `조건부 ?�문 ?��? 분석: "${metadata.normalizedTitle}" ?�식/?�능???��? ?�인...`,
+          `조건부 원문 정보 분석: "${metadata.normalizedTitle}" 형식/성능 근거 확인...`,
           paperNum,
           total,
           metadata.normalizedTitle
@@ -181,7 +180,7 @@ export async function runAnalysisPipeline(
         // Step 5: Comparison Research Finder
         notify(
           "comparisonFinder",
-          `비교 ?�구 ?�색: "${metadata.normalizedTitle}" 최근 1~2???�사 �??�행 ?�문 조사 �?..`,
+          `비교 연구 탐색: "${metadata.normalizedTitle}" 최근 유사 및 선행 논문 조사 중...`,
           paperNum,
           total,
           metadata.normalizedTitle
@@ -200,7 +199,7 @@ export async function runAnalysisPipeline(
       // Step 6: Paper Evaluation
       notify(
         "paperEvaluator",
-        `?��? 근거 ?�성: "${metadata.normalizedTitle}" 6�???�� ?�수 �?교차 검�??�성 �?..`,
+        `?됯? 洹쇨굅 ?앹꽦: "${metadata.normalizedTitle}" 6異???웾 ?먯닔 諛?援먯감 寃利??앹꽦 以?..`,
         paperNum,
         total,
         metadata.normalizedTitle
@@ -214,16 +213,10 @@ export async function runAnalysisPipeline(
         context
       );
 
-      const validScoresCount = [
-        evaluation.scores.performance?.score,
-        evaluation.scores.novelty?.score,
-        evaluation.scores.trendImportance?.score,
-        evaluation.scores.academicSignificance?.score,
-        evaluation.scores.practicalValue?.score,
-        evaluation.scores.reproducibility?.score,
-      ].filter((s) => s !== null && s !== undefined && typeof s === "number" && !isNaN(s)).length;
-      const totalDimensions = 6;
-      const evaluationCoverage = Math.round((validScoresCount / totalDimensions) * 100);
+      const coreEvaluation = calculateCoreEvaluation(evaluation.scores);
+      const validScoresCount = coreEvaluation.validScoresCount;
+      const totalDimensions = coreEvaluation.totalDimensions;
+      const evaluationCoverage = coreEvaluation.evaluationCoverage;
 
       const cand: PaperCandidate = {
         id: draft.id,
@@ -236,6 +229,9 @@ export async function runAnalysisPipeline(
         biorxivId: metadata.biorxivId,
         url: metadata.canonicalUrl || metadata.url,
         publicationStatus: metadata.publicationStatus,
+        bibliographicStatus: metadata.crossVerificationStatus === "VERIFIED" ? "VERIFIED" : metadata.crossVerificationStatus === "SINGLE_SOURCE" ? "PARTIAL" : "UNVERIFIED",
+        performanceEvidenceStatus: evaluation.scores.performance?.status === "SCORED" ? "VERIFIED" : ((docAnalysis.quantitativeResults?.length || 0) + (docAnalysis.metrics?.length || 0) + (docAnalysis.baselines?.length || 0) > 0 ? "PARTIAL" : "NOT_VERIFIED"),
+        evaluationStatus: validScoresCount === totalDimensions ? "FULL" : validScoresCount > 0 ? "PARTIAL" : "INSUFFICIENT_EVIDENCE",
         versionInfo: metadata.versionInfo,
         crossVerificationStatus: metadata.crossVerificationStatus,
 
@@ -266,19 +262,19 @@ export async function runAnalysisPipeline(
 
         codeStatus: resources.codeStatus,
         codeUrl: resources.codeUrl,
-        codeAvailable: ["AVAILABLE_VERIFIED", "FOUND_UNVERIFIED"].includes(resources.codeStatus),
+        codeAvailable: ["CODE_AVAILABLE_VERIFIED", "REPOSITORY_FOUND", "AVAILABLE_VERIFIED", "FOUND_UNVERIFIED"].includes(resources.codeStatus),
         dataStatus: resources.dataStatus,
         dataUrl: resources.dataUrl,
-        dataAvailable: ["AVAILABLE_VERIFIED", "AVAILABLE_WITH_RESTRICTIONS"].includes(resources.dataStatus),
+        dataAvailable: ["PUBLIC_DATASET_VERIFIED", "PUBLIC_BENCHMARK_USED", "AVAILABLE_VERIFIED", "AVAILABLE_WITH_RESTRICTIONS"].includes(resources.dataStatus),
         reproducibilityStatus: resources.reproducibilityLevel,
         reproducibilityAssessment: resources.reproducibilityAssessment,
         verificationScope: evaluation.verificationScope,
         overallBadgeStatus: isUnverified ? "IDENTITY_NOT_FOUND" : evaluation.overallBadgeStatus,
         scores: evaluation.scores,
-        publishingReliabilityScore: isUnverified ? null : (metadata.peerReviewed ? 5 : 3),
+        publishingReliabilityScore: isUnverified ? null : (metadata.publicationStatus === "PEER_REVIEWED" ? 5 : metadata.publicationStatus === "PUBLISHED" ? 4 : null),
         publishingReliabilityDetails: metadata.publishingReliabilityDetails,
         recencyScore: isUnverified ? null : 5,
-        recencyNotes: isUnverified ? "Paper identity not verified; recency excluded" : `${metadata.year} publication/preprint`,
+        recencyNotes: isUnverified ? "논문 신원이 확인되지 않아 최신성 metadata를 제외했습니다." : `${metadata.year} publication/preprint`,
         comparisonModule: comparison.comparisonModule,
         uncertainty: evaluation.uncertainty,
         verificationBadges: evaluation.verificationBadges,
@@ -329,11 +325,11 @@ export async function runAnalysisPipeline(
     ];
 
     // Step 7: Recommendation Engine
-    notify("recommendationEngine", "최종 추천 결정: ??층위 ?�사결정(?�술 리더 vs 주간 주제 리더) ?�산 �?..");
+    notify("recommendationEngine", "최종 추천 결정: 점수, 주제 적합도, 검증 상태의 tradeoff를 계산 중...");
     const aiRecommendation = await generateRecommendation(
       provider,
       rankingCandidatesForRecommendation,
-      parsedBriefing.coreTopic || "AI ?�구",
+      parsedBriefing.coreTopic || "AI ?곌뎄",
       context
     );
 
@@ -409,7 +405,7 @@ export async function runAnalysisPipeline(
 
     const usageSummary = aggregateAnalysisRunUsage(
       analysisRunId,
-      analysisMode,
+      "STANDARD",
       finalCandidates.length,
       callLogs,
       startedAtIso,
@@ -427,25 +423,30 @@ export async function runAnalysisPipeline(
       aiRecommendation,
       supportingResources,
       analysisRunId,
-      analysisMode,
+      analysisMode: "STANDARD",
       usageSummary,
       fallbackUsed: false,
       verificationLevel: "HIGH",
       resultOrigin: "LIVE_PIPELINE",
     } as any;
 
-    notify("completed", "�м� �Ϸ�: ����Ʈ �� �ĺ� ī�� ���� �Ϸ�");
+    notify("completed", "분석 완료: 리포트 및 후보 카드 생성 완료");
     return finalResponse;
   } catch (err: any) {
     console.warn("[Orchestrator Warning] AI pipeline failed or integrity check failed, using fallback analyzer:", err?.message);
     const fallbackReason = `AI Pipeline Error: ${err?.message || String(err)}`;
     const fallback = generateFallbackAnalysis(briefingMarkdown, fallbackReason);
     fallback.analysisRunId = analysisRunId;
-    fallback.analysisMode = analysisMode;
-    notify("completed", "분석 ?�료 (Dynamic Fallback ?�용)");
+    fallback.analysisMode = "STANDARD";
+    notify("completed", "遺꾩꽍 ?꾨즺 (Dynamic Fallback ?곸슜)");
     return fallback;
   }
 }
+
+
+
+
+
 
 
 

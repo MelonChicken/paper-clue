@@ -1,4 +1,4 @@
-export interface DatasetItem {
+﻿export interface DatasetItem {
   name: string;
   description: string;
   link?: string;
@@ -46,7 +46,7 @@ export type EvidenceType = 'PAPER' | 'EXTERNAL' | 'AI_INTERPRETATION';
 export type VerificationStatus = 'DIRECTLY_VERIFIED' | 'PARTIALLY_VERIFIED' | 'NOT_VERIFIED';
 export type CrossVerificationStatus = 'VERIFIED' | 'SINGLE_SOURCE' | 'CONFLICTING' | 'NOT_FOUND';
 export type ScopeVerificationStatus = 'VERIFIED' | 'SINGLE_SOURCE' | 'CONFLICTING' | 'NOT_FOUND' | 'NOT_CHECKED';
-export type OverallBadgeStatus = 'BASIC_INFO_VERIFIED' | 'PARTIAL_INFO_UNVERIFIED' | 'SOURCE_CONFLICT' | 'IDENTITY_NOT_FOUND' | '�Ϻ� ���� ��Ȯ��';
+export type OverallBadgeStatus = 'BASIC_INFO_VERIFIED' | 'PARTIAL_INFO_UNVERIFIED' | 'SOURCE_CONFLICT' | 'IDENTITY_NOT_FOUND' | '일부 정보 미확인';
 
 export interface GroundedEvidenceItem {
   evidenceType: EvidenceType;
@@ -79,6 +79,10 @@ export interface GroundedEvidence {
 
 export type ScoreStatus = 'SCORED' | 'NEEDS_VERIFICATION' | 'NOT_APPLICABLE' | 'INSUFFICIENT_EVIDENCE';
 export type ScoreScope = 'EXTERNAL_BENCHMARK' | 'INTERNAL_EXPERIMENT' | 'QUALITATIVE_ONLY';
+export type BibliographicStatus = 'VERIFIED' | 'PARTIAL' | 'UNVERIFIED';
+export type PublicationStatus = 'PREPRINT' | 'PEER_REVIEWED' | 'PUBLISHED' | 'UNKNOWN';
+export type PerformanceEvidenceStatus = 'VERIFIED' | 'PARTIAL' | 'NOT_VERIFIED';
+export type EvaluationStatus = 'FULL' | 'PARTIAL' | 'INSUFFICIENT_EVIDENCE';
 
 export interface DimensionScore {
   score: number | null; // 1-5, or null if N/A, unverified, or insufficient
@@ -113,6 +117,10 @@ export interface PublishingReliabilityDetails {
 }
 
 export type CodeStatus = 
+  | 'CODE_AVAILABLE_VERIFIED'
+  | 'REPOSITORY_FOUND'
+  | 'PROJECT_PAGE_ONLY'
+  | 'UNKNOWN'
   | 'AVAILABLE_VERIFIED' 
   | 'FOUND_UNVERIFIED' 
   | 'SEARCH_FAILED' 
@@ -124,6 +132,11 @@ export type CodeStatus =
   | 'NOT_APPLICABLE';
 
 export type DataStatus = 
+  | 'PUBLIC_DATASET_VERIFIED'
+  | 'PUBLIC_BENCHMARK_USED'
+  | 'DATASET_LINK_NOT_VERIFIED'
+  | 'PRIVATE_OR_UNAVAILABLE'
+  | 'UNKNOWN'
   | 'AVAILABLE_VERIFIED' 
   | 'AVAILABLE_WITH_RESTRICTIONS' 
   | 'FOUND_UNVERIFIED'
@@ -153,6 +166,7 @@ export interface ReproducibilityAssessment {
   level: ReproducibilityStatus;
   score: number | null;
   reason: string;
+  missingElements?: string[];
 }
 
 export interface VerificationScope {
@@ -223,12 +237,12 @@ export interface ComparisonResearchModule {
   nearTaskComparisonStudies?: NearTaskComparisonStudy[];
   contextualRelatedStudies: ContextualRelatedStudy[];
   representativePriorStudies: RepresentativePriorStudy[];
-  sotaStatus: string; // e.g., "SOTA ?�단 불�? (비교 조건 ?�이)" or "SOTA ?�인??
+  sotaStatus: string; // e.g., "SOTA ?먮떒 遺덇? (鍮꾧탳 議곌굔 ?곸씠)" or "SOTA ?뺤씤??
   summary: string;
 }
 
 export interface UncertaintyBreakdown {
-  factVerificationItems: string[];      // ?�실 검�??�요
+  factVerificationItems: string[];      // ?ъ떎 寃利??꾩슂
   insufficientEvidenceItems: string[];
   researchOpenQuestions: string[];
 }
@@ -263,6 +277,9 @@ export interface PaperCandidate {
   biorxivId?: string | null;
   url?: string | null;
   publicationStatus: string;
+  bibliographicStatus?: BibliographicStatus;
+  performanceEvidenceStatus?: PerformanceEvidenceStatus;
+  evaluationStatus?: EvaluationStatus;
   versionInfo?: VersionInfo;
   crossVerificationStatus: CrossVerificationStatus;
 
@@ -297,8 +314,12 @@ export interface PaperCandidate {
   verificationScope?: VerificationScope;
   overallBadgeStatus?: OverallBadgeStatus;
 
-  // 6 Radar Dimensions
+  // Canonical 5 user-facing dimensions. Legacy keys are kept for cached data compatibility.
   scores: {
+    topicRelevance?: DimensionScore;
+    methodNovelty?: DimensionScore;
+    researchValue?: DimensionScore;
+    academicReliability?: DimensionScore;
     performance: DimensionScore;
     novelty: DimensionScore;
     trendImportance: DimensionScore;
@@ -409,6 +430,9 @@ export interface BriefingAnalysisResponse {
 }
 
 export type CandidateUserStatus = 'selected' | 'held' | 'excluded' | 'none';
+
+
+
 
 
 

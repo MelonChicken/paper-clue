@@ -1,7 +1,8 @@
 ﻿import React from "react";
 import { PaperCandidate } from "../types";
 import { Table, BookmarkCheck, Check, HelpCircle } from "lucide-react";
-import { getPaperEvaluationStatus, sortCandidatesByEvaluation } from "../utils/evaluationHelpers";
+import { sortCandidatesByEvaluation } from "../utils/evaluationHelpers";
+import { CORE_SCORE_KEYS, CORE_SCORE_LABELS, CoreScoreKey, buildCanonicalPaperEvaluation } from "../utils/paperSemantics";
 
 interface ComparisonTableProps {
   candidates: PaperCandidate[];
@@ -10,15 +11,6 @@ interface ComparisonTableProps {
   onOpenEvidence: (paper: PaperCandidate, dimensionKey?: string) => void;
   onSelectFinalChoice: (paperId: string) => void;
 }
-
-const SCORE_COLUMNS = [
-  ["performance", "성능 경쟁력"],
-  ["novelty", "방법론 신규성"],
-  ["trendImportance", "연구 흐름"],
-  ["academicSignificance", "학술 유의미성"],
-  ["practicalValue", "실무·연구 적용"],
-  ["reproducibility", "재현 가능성"],
-] as const;
 
 export const ComparisonTable: React.FC<ComparisonTableProps> = ({
   candidates,
@@ -29,27 +21,13 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
 }) => {
   const sortedCandidates = sortCandidatesByEvaluation(candidates, aiRecommendedId);
 
-  const renderScoreCell = (paper: PaperCandidate, dimensionKey: keyof PaperCandidate["scores"], score: number | null) => {
-    const dimObj = paper.scores[dimensionKey];
-    const status = dimObj?.status;
-
+  const renderScoreCell = (paper: PaperCandidate, dimensionKey: CoreScoreKey, score: number | null) => {
     if (score === null) {
-      const isNA = status === "NOT_APPLICABLE";
-      const isNeedsVerification = status === "NEEDS_VERIFICATION";
-      const label = isNA ? "해당 없음" : isNeedsVerification ? "추가 확인" : "평가 보류";
       return (
         <td onClick={() => onOpenEvidence(paper, dimensionKey)} className="p-3 text-center cursor-pointer hover:bg-slate-100/80 transition-colors">
-          <span
-            className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-semibold ${
-              isNA
-                ? "bg-slate-100 text-slate-600 border border-slate-200"
-                : isNeedsVerification
-                ? "bg-blue-50 text-blue-700 border border-blue-200"
-                : "bg-amber-100 text-amber-800 border border-amber-200"
-            }`}
-          >
+          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
             <HelpCircle className="w-3 h-3" />
-            <span>{label}</span>
+            <span>근거 부족</span>
           </span>
         </td>
       );
@@ -81,24 +59,25 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
       </div>
 
       <div className="overflow-x-auto -mx-5 sm:-mx-6">
-        <table className="w-full text-left text-xs border-collapse min-w-[960px]">
+        <table className="w-full text-left text-xs border-collapse min-w-[1040px]">
           <thead>
             <tr className="bg-slate-900 text-slate-200 border-b border-slate-800">
               <th className="p-3 font-semibold pl-6 min-w-[220px]">논문 후보명</th>
               <th className="p-3 font-semibold text-center">평가 상태</th>
-              {SCORE_COLUMNS.map(([, label]) => (
-                <th key={label} className="p-3 font-semibold text-center">{label}</th>
+              {CORE_SCORE_KEYS.map((key) => (
+                <th key={key} className="p-3 font-semibold text-center">{CORE_SCORE_LABELS[key]}</th>
               ))}
-              <th className="p-3 font-semibold text-center bg-slate-800">출판 신뢰도</th>
-              <th className="p-3 font-semibold text-center bg-slate-800">최신성</th>
+              <th className="p-3 font-semibold text-center bg-slate-800">출판 상태</th>
+              <th className="p-3 font-semibold text-center bg-slate-800">코드 상태</th>
+              <th className="p-3 font-semibold text-center bg-slate-800">데이터 상태</th>
               <th className="p-3 font-semibold text-center pr-6">최종 선택</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {sortedCandidates.map((paper) => {
+              const canonical = buildCanonicalPaperEvaluation(paper);
               const isAiRec = paper.id === aiRecommendedId;
               const isFinalChoice = paper.id === finalChoicePaperId;
-              const evalStatus = getPaperEvaluationStatus(paper);
 
               return (
                 <tr
@@ -121,22 +100,22 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
                       )}
                     </div>
                     <button className="line-clamp-2 text-left text-slate-800 hover:text-indigo-600" onClick={() => onOpenEvidence(paper)}>
-                      {paper.title}
+                      {canonical.identity.title}
                     </button>
                     <div className="text-[11px] text-slate-400 font-normal mt-0.5">
-                      {paper.venueOrPreprint} ({paper.year})
+                      {canonical.identity.venue || "출처 확인 필요"} ({canonical.identity.year || "연도 확인 필요"})
                     </div>
                   </td>
 
                   <td className="p-3 text-center">
-                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${evalStatus.badgeClass}`}>{evalStatus.label}</span>
-                    <div className="text-[10px] text-slate-500 font-medium mt-0.5">{evalStatus.scoreDisplay}</div>
+                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold border bg-slate-100 text-slate-700 border-slate-200">{canonical.labels.evaluationStatus}</span>
+                    <div className="text-[10px] text-slate-500 font-medium mt-0.5">{canonical.labels.scoreDisplay}</div>
                   </td>
 
-                  {SCORE_COLUMNS.map(([key]) => renderScoreCell(paper, key, paper.scores[key].score))}
-
-                  {renderScoreCell(paper, "academicSignificance", paper.publishingReliabilityScore)}
-                  {renderScoreCell(paper, "trendImportance", paper.recencyScore)}
+                  {CORE_SCORE_KEYS.map((key) => renderScoreCell(paper, key, canonical.evaluation[key]))}
+                  <td className="p-3 text-center bg-slate-50 text-[11px] text-slate-600">{canonical.labels.publicationStatus}</td>
+                  <td className="p-3 text-center bg-slate-50 text-[11px] text-slate-600">{canonical.labels.codeStatus}</td>
+                  <td className="p-3 text-center bg-slate-50 text-[11px] text-slate-600">{canonical.labels.dataStatus}</td>
 
                   <td className="p-3 pr-6 text-center">
                     <button

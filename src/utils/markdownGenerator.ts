@@ -1,26 +1,77 @@
-﻿import { BriefingAnalysisResponse, CandidateUserStatus } from "../types";
+import { BriefingAnalysisResponse, CandidateUserStatus, GroundedEvidenceItem } from "../types";
+import {
+  CORE_SCORE_KEYS,
+  CORE_SCORE_LABELS,
+  CanonicalPaperEvaluation,
+  EvidenceClaim,
+  buildCanonicalPaperEvaluations,
+  buildCanonicalRecommendationResult,
+  containsBrokenEncoding,
+  sanitizeUserText,
+  formatEvidenceForUser,
+  formatStrengthForUser,
+  formatUncertaintyForUser,
+  formatOpenQuestionForUser,
+  formatCanonicalMetricClaim,
+  getCanonicalRanking,
+} from "./paperSemantics";
 
 function sanitizeCell(val: string | number | undefined | null): string {
   if (val === undefined || val === null || val === "") return "-";
-  return String(val).replace(/\r?\n/g, " ").replace(/\|/g, "\\|").trim();
+  return sanitizeUserText(String(val), "추가 확인 필요").replace(/\r?\n/g, " ").replace(/\|/g, "\\|").trim();
 }
 
-function codeStatus(val: string | undefined | null): string {
-  return val ? `\`${val}\`` : "-";
-}
-
-function scoreText(score: number | null | undefined, status?: string): string {
-  if (score !== null && score !== undefined) return `${score}점`;
-  if (status === "NOT_APPLICABLE") return "N/A";
-  return "추가 확인 필요";
+function scoreText(score: number | null): string {
+  return typeof score === "number" ? `${score}점` : "근거 부족";
 }
 
 function listItems(items: string[] | undefined, empty = "- 없음"): string {
-  return items && items.length > 0 ? items.map((item) => `- ${item}`).join("\n") : empty;
+  const cleaned = (items || []).map((item) => formatEvidenceForUser(item)).filter(Boolean);
+  return cleaned.length > 0 ? cleaned.map((item) => `- ${item}`).join("\n") : empty;
 }
 
-function indentedList(items: string[] | undefined, empty = "  - 특이사항 없음"): string {
-  return items && items.length > 0 ? items.map((item) => `  - ${item}`).join("\n") : empty;
+function evidenceItemLine(item: GroundedEvidenceItem, fallbackSource: string): string {
+  const source = sanitizeCell(item.sourceLocation || item.sourceTitle || fallbackSource);
+  return `  - [${source}] ${formatEvidenceForUser(item.claim || item.text)}`;
+}
+
+function claimLine(claim: EvidenceClaim): string {
+  const statusLabel = claim.verificationStatus === "VERIFIED" ? "검증됨" : claim.verificationStatus === "PARTIAL" ? "부분 확인" : "원문 확인 필요";
+  const metric = claim.metric ? ` (${formatCanonicalMetricClaim(claim)})` : "";
+  const source = claim.sourceLocation ? ` · ${sanitizeCell(claim.sourceLocation)}` : "";
+  return `- **${statusLabel}**${metric}${source}: ${formatEvidenceForUser(claim.claim)}`;
+}
+function evidenceLines(canonical: CanonicalPaperEvaluation): string[] {
+  const quantitativeClaims = canonical.evidenceClaims.filter((claim) => (claim.type === "QUANTITATIVE_RESULT" || claim.type === "BASELINE_COMPARISON") && claim.metric);
+  const unverifiedClaims = canonical.evidenceClaims.filter((claim) => claim.verificationStatus === "UNVERIFIED" && (claim.type === "QUANTITATIVE_RESULT" || claim.type === "METHOD" || claim.type === "OTHER"));
+  const absenceClaims = canonical.evidenceClaims.filter((claim) => claim.type === "ABSENCE_OF_QUANTITATIVE_RESULT");
+  return [
+    "- **정량 근거**:",
+    quantitativeClaims.length ? quantitativeClaims.map(claimLine).join("\n") : (absenceClaims.length ? "  - 현재 확보한 원문에서는 직접적인 정량 비교 결과를 확인하지 못했습니다." : "  - 현재 확보된 원문/공식 출처 범위에서는 정량 결과를 직접 확인하지 못했습니다."),
+    "- **논문 원문 근거**:",
+    canonical.evidence.paperEvidence.length
+      ? canonical.evidence.paperEvidence.map((e) => evidenceItemLine(e, "논문 원문")).join("\n")
+      : "  - 명시적인 원문 근거가 아직 확보되지 않았습니다.",
+    "- **외부 출처 근거**:",
+    canonical.evidence.externalEvidence.length
+      ? canonical.evidence.externalEvidence.map((e) => evidenceItemLine(e, "외부 출처")).join("\n")
+      : "  - 외부 교차검증 정보가 아직 확보되지 않았습니다.",
+    "- **AI 종합 해석**:",
+    canonical.evidence.aiInterpretation.length
+      ? canonical.evidence.aiInterpretation.map((e) => `  - ${formatEvidenceForUser(e.claim || e.text)}`).join("\n")
+      : Object.entries(canonical.interpretation.evaluationRationales).length
+      ? Object.entries(canonical.interpretation.evaluationRationales)
+          .map(([key, reason]) => `  - ${CORE_SCORE_LABELS[key as keyof typeof CORE_SCORE_LABELS]}: ${formatEvidenceForUser(reason)}`)
+          .join("\n")
+      : "  - AI 종합 해석 없음",
+    "- **미검증 Claim**:",
+    unverifiedClaims.length ? unverifiedClaims.map(claimLine).join("\n") : "  - 없음",
+  ];
+}
+
+function validateMarkdown(markdown: string): string {
+  if (!containsBrokenEncoding(markdown)) return markdown;
+  return markdown.replace(/\uFFFD|�|\?먮[^\]\s]*/g, "추가 확인 필요");
 }
 
 export function generateReportMarkdown(
@@ -30,34 +81,41 @@ export function generateReportMarkdown(
 ): string {
   void userSelections;
 
-  const dateStr = new Date().toLocaleDateString("ko-KR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-
-  const finalChosenPaper = data.candidates.find((c) => c.id === finalChoicePaperId);
-  const aiRecommendedPaper = data.candidates.find((c) => c.id === data.aiRecommendation.topRecommendedPaperId);
+  const dateStr = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
+  const canonicalCandidates = buildCanonicalPaperEvaluations(data.candidates, data.aiRecommendation);
+  const canonicalRanking = getCanonicalRanking(canonicalCandidates);
+  const rankedCanonicalCandidates = canonicalRanking.map((entry) => entry.canonical);
+  const topRankEntries = canonicalRanking.filter((entry) => entry.rank === 1 && entry.score !== null);
+  const topRankDisplay = topRankEntries.length > 0
+    ? topRankEntries.map((entry) => `${entry.canonical.identity.title} (${entry.canonical.labels.scoreDisplay} · ${entry.canonical.labels.evaluationStatus})`).join("<br>")
+    : "-";
+  const topRankJudgment = topRankEntries.length > 1 ? `공동 최고점 ${topRankEntries.length}편` : (topRankEntries[0]?.canonical.labels.scoreDisplay || "-");
+  const canonicalById = new Map(canonicalCandidates.map((paper) => [paper.paperId, paper]));
+  const recommendation = buildCanonicalRecommendationResult(data.candidates, data.aiRecommendation);
+  const finalChosenPaper = finalChoicePaperId ? canonicalById.get(finalChoicePaperId) || null : null;
+  const aiRecommendedPaper = recommendation.recommendedPaper;
+  const highestScoringPaper = recommendation.highestScoringPaper;
 
   const lines: string[] = [
     "# [논문갈피] 주간 논문 분석 및 최종 선택 리포트",
     `> **분석 기준일**: ${dateStr}  `,
-    `> **연구 브리핑 제목**: ${data.briefingTitle || "주간 연구 브리핑"}  `,
+    `> **연구 브리핑 제목**: ${sanitizeCell(data.briefingTitle || "주간 연구 브리핑")}  `,
     "> **서비스**: 논문갈피 · 근거 기반 연구 의사결정 지원 서비스",
     "",
     "---",
     "",
     "## 1. 종합 선택 요약",
     "",
-    "| 구분 | 논문 제목 | 출판 / 버전 | 교차검증 상태 | 주요 특징 및 연구 위치 |",
+    "| 구분 | 논문 제목 | 출판 / 버전 | 서지 상태 | 주요 판단 |",
     "| :--- | :--- | :--- | :---: | :--- |",
-    `| **현재 검증 가능한 후보 중 우선 추천** | ${sanitizeCell(aiRecommendedPaper?.title || "추천 보류")} | ${sanitizeCell(aiRecommendedPaper?.venueOrPreprint)} | ${codeStatus(aiRecommendedPaper?.crossVerificationStatus)} | ${sanitizeCell(data.aiRecommendation.positionInRecentTrend)} |`,
-    `| **사용자 최종 선택** | ${finalChosenPaper ? `**${sanitizeCell(finalChosenPaper.title)}**` : "*아직 선택되지 않음*"} | ${sanitizeCell(finalChosenPaper?.venueOrPreprint)} | ${codeStatus(finalChosenPaper?.crossVerificationStatus)} | ${finalChosenPaper ? "이번 주 읽기 지정 논문" : "-"} |`,
+    `| **5축 종합점수 1위** | ${sanitizeCell(topRankDisplay)} | ${topRankEntries.length > 1 ? "공동 순위" : sanitizeCell(highestScoringPaper?.labels.publicationDisplay || "-")} | ${topRankEntries.length > 1 ? "-" : sanitizeCell(highestScoringPaper?.labels.bibliographicStatus || "-")} | ${sanitizeCell(topRankJudgment)} |`,
+    `| **AI 우선 추천** | ${sanitizeCell(aiRecommendedPaper?.identity.title || "추천 보류")} | ${sanitizeCell(aiRecommendedPaper?.labels.publicationDisplay || "-")} | ${sanitizeCell(aiRecommendedPaper?.labels.bibliographicStatus || "-")} | ${sanitizeCell(formatEvidenceForUser(data.aiRecommendation.positionInRecentTrend))} |`,
+    `| **사용자 최종 선택** | ${finalChosenPaper ? `**${sanitizeCell(finalChosenPaper.identity.title)}**` : "*아직 선택되지 않음*"} | ${sanitizeCell(finalChosenPaper?.labels.publicationDisplay || "-")} | ${sanitizeCell(finalChosenPaper?.labels.bibliographicStatus || "-")} | ${finalChosenPaper ? "이번 주 읽기 지정 논문" : "-"} |`,
     "",
   ];
 
-  if (finalChoicePaperId && finalChoicePaperId !== data.aiRecommendation.topRecommendedPaperId) {
-    lines.push("> 참고: AI 추천과 사용자 최종 선택이 다릅니다. 논문갈피는 근거를 제시하고, 최종 결정은 연구자가 수행합니다.", "");
+  if (recommendation.tradeoffExplanation) {
+    lines.push("### 추천 역전 사유", recommendation.tradeoffExplanation, "");
   }
 
   lines.push(
@@ -65,34 +123,27 @@ export function generateReportMarkdown(
     "",
     "## 2. 브리핑 추출 및 검증 분류 현황",
     "",
-    `- **추출된 논문 후보**: 총 ${data.extraction?.extractedPaperCount ?? data.candidates.length}편 (검증 완료: ${data.candidates.filter((c) => c.crossVerificationStatus !== "NOT_FOUND").length}편, 평가 제외: ${data.candidates.filter((c) => c.crossVerificationStatus === "NOT_FOUND").length}편)`,
+    `- **추출된 논문 후보**: 총 ${data.extraction?.extractedPaperCount ?? data.candidates.length}편 (서지 확인: ${canonicalCandidates.filter((c) => c.verification.bibliographicStatus === "VERIFIED").length}편, 평가 제외 논문: ${data.candidates.filter((c) => c.crossVerificationStatus === "NOT_FOUND").length}편)`,
     `- **데이터셋**: ${data.extraction?.datasetCount ?? 0}개 (${data.extraction?.datasets?.map((d) => d.name).join(", ") || "없음"})`,
     `- **GitHub 도구/저장소**: ${data.extraction?.githubToolCount ?? 0}개 (${data.extraction?.githubTools?.map((g) => g.name).join(", ") || "없음"})`,
-    `- **평가 제외 항목**: ${data.extraction?.excludedItems?.join(", ") || "없음"}`,
+    `- **점수 산정에서 제외된 미검증 주장·아이디어**: ${data.extraction?.excludedItems?.map((item) => sanitizeUserText(item)).join(", ") || "없음"}`,
     "- **불확실성 현황**:",
     `  - 사실 검증 필요: ${data.extraction?.uncertaintySummary?.factVerificationCount ?? 0}건`,
     `  - 평가 근거 부족: ${data.extraction?.uncertaintySummary?.insufficientEvidenceCount ?? 0}건`,
-    `  - 연구 Open Question: ${data.extraction?.uncertaintySummary?.researchOpenQuestionCount ?? 0}건`,
+    `  - 추가 연구 질문: ${data.extraction?.uncertaintySummary?.researchOpenQuestionCount ?? 0}건`,
     "",
     "---",
     "",
     "## 3. 후보 논문 종합 평가 비교표",
     "",
-    "| 논문명 | 교차검증 | 성능 경쟁력 | 방법론 신규성 | 연구 흐름 | 학술 유의미성 | 실무·연구 적용 | 재현 가능성 | 출판 신뢰도 | 최신성 |",
+    "확인 가능한 평가 항목의 평균이며, 근거가 부족한 항목은 점수 계산에서 제외됩니다.",
+    "",
+    "| 논문명 | 평가 상태 | 주제 적합도 | 방법론 신규성 | 연구 가치 | 학술 신뢰도 | 재현 가능성 | 출판 상태 | 코드 상태 | 데이터 상태 |",
     "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |"
   );
 
-  data.candidates.forEach((c) => {
-    const isSelected = c.id === finalChoicePaperId;
-    const isAiRec = c.id === data.aiRecommendation.topRecommendedPaperId;
-    let badge = "";
-    if (isSelected && isAiRec) badge = " [추천 및 최종 선택]";
-    else if (isSelected) badge = " [최종 선택]";
-    else if (isAiRec) badge = " [우선 추천]";
-
-    lines.push(
-      `| **${sanitizeCell(c.title)}**${badge} | ${codeStatus(c.crossVerificationStatus)} | ${scoreText(c.scores.performance.score, c.scores.performance.status)} | ${scoreText(c.scores.novelty.score, c.scores.novelty.status)} | ${scoreText(c.scores.trendImportance.score, c.scores.trendImportance.status)} | ${scoreText(c.scores.academicSignificance.score, c.scores.academicSignificance.status)} | ${scoreText(c.scores.practicalValue.score, c.scores.practicalValue.status)} | ${scoreText(c.scores.reproducibility.score, c.scores.reproducibility.status)} | ${scoreText(c.publishingReliabilityScore)} | ${scoreText(c.recencyScore)} |`
-    );
+  rankedCanonicalCandidates.forEach((paper) => {
+    lines.push(`| **${sanitizeCell(paper.identity.title)}** | ${paper.labels.evaluationStatus} · ${paper.labels.scoreDisplay} | ${CORE_SCORE_KEYS.map((key) => scoreText(paper.evaluation[key])).join(" | ")} | ${sanitizeCell(paper.labels.publicationStatus)} | ${sanitizeCell(paper.labels.codeStatus)} | ${sanitizeCell(paper.labels.dataStatus)} |`);
   });
 
   lines.push(
@@ -101,127 +152,81 @@ export function generateReportMarkdown(
     "",
     "## 4. 추천 근거 및 위치 분석",
     "",
-    `### 현재 검증 가능한 후보 중 우선 추천: ${aiRecommendedPaper?.title || "N/A"}`,
+    `### 현재 검증 가능한 후보 중 우선 추천: ${sanitizeCell(aiRecommendedPaper?.identity.title || "N/A")}`,
     "",
-    `- **추천 이유**: ${data.aiRecommendation.recommendationReason}`,
-    `- **최근 연구 흐름에서의 위치**: ${data.aiRecommendation.positionInRecentTrend}`,
+    `- **추천 이유**: ${formatStrengthForUser(recommendation.tradeoffExplanation || aiRecommendedPaper?.interpretation.strengths[0] || data.aiRecommendation.recommendationReason, aiRecommendedPaper?.verification.publicationStatus || "UNKNOWN")}`,
+    `- **최근 연구 흐름에서의 위치**: ${formatEvidenceForUser(data.aiRecommendation.positionInRecentTrend)}`,
+    `- **성능 근거 사용 여부**: ${data.aiRecommendation.performanceEvidenceUsed ? "사용" : "충분한 비교 근거가 없어 핵심 점수에서 제외"}`,
     "",
     "#### 주요 강점",
-    listItems(data.aiRecommendation.keyStrengths),
+    listItems(aiRecommendedPaper?.interpretation.strengths, "- 추천 근거 추가 확인 필요"),
     "",
     "#### 주요 한계 및 위험요소",
-    listItems(data.aiRecommendation.keyLimitationsOrRisks),
+    listItems(aiRecommendedPaper?.interpretation.limitations || data.aiRecommendation.keyLimitationsOrRisks),
     "",
     "#### 검증 필요 사항",
-    listItems(data.aiRecommendation.verificationNeededNotes),
+    listItems(aiRecommendedPaper ? [...aiRecommendedPaper.uncertainty.factVerification, ...aiRecommendedPaper.uncertainty.insufficientEvidence] : data.aiRecommendation.consideredUncertainties),
     "",
     "---",
     "",
-    "## 5. 선택 논문 상세 읽기 가이드 (Reading Checklist)",
+    "## 5. 선택 논문 상세 읽기 가이드",
     ""
   );
 
-  if (finalChosenPaper) {
-    const identifier = finalChosenPaper.doi
-      ? `DOI: ${finalChosenPaper.doi}`
-      : finalChosenPaper.arxivId
-      ? `arXiv: ${finalChosenPaper.arxivId}`
-      : finalChosenPaper.url || "링크 정보 확인 필요";
-
+  const readingTarget = finalChosenPaper || aiRecommendedPaper;
+  if (readingTarget) {
     lines.push(
-      `### 최종 선택 논문: ${finalChosenPaper.title}`,
+      `# 읽기 노트: ${readingTarget.identity.title}`,
       "",
-      `- **저자**: ${finalChosenPaper.authors.join(", ")} (${finalChosenPaper.year})`,
-      `- **출판/Preprint**: ${finalChosenPaper.venueOrPreprint} (${finalChosenPaper.publicationStatus})`,
-      `- **식별자 주소**: ${identifier}`,
-      `- **코드 상태**: ${codeStatus(finalChosenPaper.codeStatus)} (${finalChosenPaper.codeUrl || "URL 미제공"})`,
-      `- **데이터 상태**: ${codeStatus(finalChosenPaper.dataStatus)} (${finalChosenPaper.dataUrl || "URL 미제공"})`,
-      `- **재현 가능성**: ${codeStatus(finalChosenPaper.reproducibilityStatus)}`,
+      `저자: ${readingTarget.identity.authors.join(", ") || "확인 필요"}`,
+      `발표/게재: ${readingTarget.labels.publicationDisplay}`,
+      `링크: ${readingTarget.identity.primaryUrl || "확인 필요"}`,
       "",
-      "#### 읽을 때 집중해서 검토할 질문",
-      data.aiRecommendation.readingQuestions.map((q, idx) => `${idx + 1}. **${q}**`).join("\n") || "- 없음",
+      "## 선택 근거와 강점",
+      listItems(readingTarget.interpretation.strengths.map((item) => formatStrengthForUser(item, readingTarget.verification.publicationStatus)), "- 추천 근거 추가 확인 필요"),
+      ""
+    );
+    if (readingTarget.readingGuide.preReadingChecks.length > 0) {
+      lines.push("## 읽기 전 확인 필요", listItems(readingTarget.readingGuide.preReadingChecks), "");
+    }
+    lines.push(
+      "## 읽으면서 확인할 질문",
+      readingTarget.readingGuide.questions.map((q, idx) => `${idx + 1}. ${formatEvidenceForUser(q)}`).join("\n"),
       "",
-      "#### 후속 연구 및 아이디어 확장 질문",
-      listItems(data.aiRecommendation.followUpResearchQuestions),
+      "## 다음 단계",
+      readingTarget.readingGuide.nextSteps.map((step, idx) => `${idx + 1}. ${step}`).join("\n"),
       ""
     );
   } else {
-    lines.push("*아직 최종 논문을 선택하지 않았습니다. 화면에서 [이 논문 선택] 버튼을 눌러 확정하세요.*", "");
+    lines.push("*아직 최종 논문을 선택하지 않았습니다.*", "");
   }
 
-  lines.push(
-    "---",
-    "",
-    "## 6. 각 후보 논문별 평가 근거 (Grounded Evidence) & 불확실성 분해",
-    ""
-  );
-
-  data.candidates.forEach((c, idx) => {
+  lines.push("---", "", "## 6. 각 후보 논문별 평가 근거 및 불확실성", "");
+  rankedCanonicalCandidates.forEach((paper, idx) => {
     lines.push(
-      `### ${idx + 1}. ${c.title}`,
-      `- **출판 정보**: ${c.venueOrPreprint} (교차검증 상태: ${codeStatus(c.crossVerificationStatus)})`,
-      "- **6개 평가 축 점수 요약**:",
-      `  - 성능 경쟁력: ${scoreText(c.scores.performance.score, c.scores.performance.status)} [상태: ${c.scores.performance.status}] (${c.scores.performance.reason || c.scores.performance.notes || "설명 없음"})`,
-      `  - 방법론 신규성: ${scoreText(c.scores.novelty.score, c.scores.novelty.status)} [상태: ${c.scores.novelty.status}] (${c.scores.novelty.reason || c.scores.novelty.notes || "설명 없음"})`,
-      `  - 연구 흐름 중요도: ${scoreText(c.scores.trendImportance.score, c.scores.trendImportance.status)} [상태: ${c.scores.trendImportance.status}] (${c.scores.trendImportance.reason || c.scores.trendImportance.notes || "설명 없음"})`,
-      `  - 학술 유의미성: ${scoreText(c.scores.academicSignificance.score, c.scores.academicSignificance.status)} [상태: ${c.scores.academicSignificance.status}] (${c.scores.academicSignificance.reason || c.scores.academicSignificance.notes || "설명 없음"})`,
-      `  - 실무·연구 적용 가치: ${scoreText(c.scores.practicalValue.score, c.scores.practicalValue.status)} [상태: ${c.scores.practicalValue.status}] (${c.scores.practicalValue.reason || c.scores.practicalValue.notes || "설명 없음"})`,
-      `  - 재현 가능성: ${scoreText(c.scores.reproducibility.score, c.scores.reproducibility.status)} [상태: ${c.scores.reproducibility.status}] (${c.scores.reproducibility.reason || c.scores.reproducibility.notes || "설명 없음"})`,
+      `### ${idx + 1}. ${paper.identity.title}`,
+      `- **출판 정보**: ${paper.labels.publicationDisplay}`,
+      `- **평가 상태**: ${paper.labels.evaluationStatus} · ${paper.labels.scoreDisplay}`,
+      "- **5개 평가 축 점수 요약**:",
+      ...CORE_SCORE_KEYS.map((key) => `  - ${CORE_SCORE_LABELS[key]}: ${scoreText(paper.evaluation[key])} (${formatEvidenceForUser(paper.interpretation.evaluationRationales[key], "근거 추가 확인 필요")})`),
+      `- **성능 근거 상태**: ${paper.labels.performanceEvidenceStatus}`,
+      `- **재현 가능성 설명**: ${formatEvidenceForUser(paper.interpretation.evaluationRationales.reproducibility)}`,
       "",
-      "#### 비교 연구 모듈",
-      `- **SOTA 및 성능 위치**: ${c.comparisonModule?.sotaStatus || "검증 진행 중"}`,
-      "- **1) 직접 비교 연구 (Direct Comparison)**:",
-      c.comparisonModule?.directComparisonStudies?.length
-        ? c.comparisonModule.directComparisonStudies.map((s) => `  - **${s.title}** (${s.year}): 과업 [${s.task}] | 데이터셋 [${s.dataset}] | 지표 [${s.metric}] | 성능 차이: ${s.performanceDiffNote} (식별자: ${s.identifier})`).join("\n")
-        : "  - 해당 동일 조건 직접 비교 연구 없음",
-      "- **2) 유사 과업 연구 (Near Task Comparison / 정량 직접 비교 제외)**:",
-      c.comparisonModule?.nearTaskComparisonStudies?.length
-        ? c.comparisonModule.nearTaskComparisonStudies.map((s) => `  - **${s.title}** (${s.year}): 과업 [${s.task}] | 데이터셋 [${s.dataset}] | 지표 [${s.metric}] | 간접 비교 사유: ${s.reasonNotDirectlyComparable || s.performanceDiffNote}`).join("\n")
-        : "  - 해당 유사 과업 비교 연구 없음",
-      "- **3) 맥락상 관련 연구 (Contextual Related)**:",
-      c.comparisonModule?.contextualRelatedStudies?.length
-        ? c.comparisonModule.contextualRelatedStudies.map((s) => `  - **${s.title}** (${s.year}): 관련 흐름 [${s.relatedFlow}] | 직접 비교 불가 사유: ${s.reasonDirectComparisonNotPossible}`).join("\n")
-        : "  - 해당 맥락 관련 연구 없음",
-      "- **4) 대표 선행 연구 (Representative Prior)**:",
-      c.comparisonModule?.representativePriorStudies?.length
-        ? c.comparisonModule.representativePriorStudies.map((s) => `  - **${s.title}** (${s.year}): 선행 연구 의의 [${s.significance}] | 관계: ${s.relationToTarget}`).join("\n")
-        : "  - 해당 대표 선행 연구 없음",
+      "#### 근거 원문",
+      ...evidenceLines(paper),
       "",
-      "#### 불확실성 3분할 (Uncertainty Breakdown)",
-      "- **1) 사실 검증 필요 (Fact Verification)**:",
-      indentedList(c.uncertainty?.factVerificationItems),
-      "- **2) 평가 근거 부족 (Insufficient Evidence)**:",
-      indentedList(c.uncertainty?.insufficientEvidenceItems),
-      "- **3) 연구 Open Question**:",
-      indentedList(c.uncertainty?.researchOpenQuestions),
-      "",
-      "#### 근거 원문 (Grounded Evidence)"
+      "#### 불확실성",
+      `${"- 사실 검증 필요: "}${paper.uncertainty.factVerification.map(formatUncertaintyForUser).join("; ") || "없음"}`,
+      `${"- 평가 근거 부족: "}${paper.uncertainty.insufficientEvidence.map(formatUncertaintyForUser).join("; ") || "없음"}`,
+      `${"- 추가 연구 질문: "}${paper.uncertainty.openQuestions.map(formatOpenQuestionForUser).join("; ") || "없음"}`,
+      ""
     );
-
-    if (c.crossVerificationStatus === "NOT_FOUND") {
-      lines.push(
-        "- **논문 원문 근거**:",
-        "  - 논문 식별 및 원문을 확인하지 못함",
-        "- **외부 출처 근거**:",
-        "  - 검증 가능한 동일 논문 출처를 확인하지 못함",
-        "- **AI 종합 해석**:",
-        "  - 논문 식별 미확정으로 평가 대상에서 제외"
-      );
-    } else {
-      lines.push(
-        "- **논문 원문 근거**:",
-        c.scores.performance.evidence.paperText.map((p) => `  - [${p.sourceLocation || "원문"}] ${p.claim}`).join("\n") || "  - 원문 스니펫에서 직접 추출되지 않음",
-        "- **외부 출처 근거**:",
-        c.scores.performance.evidence.externalSource.map((e) => `  - [${e.sourceTitle || "외부"}] ${e.claim}`).join("\n") || "  - 외부 기록 확인 필요",
-        "- **AI 종합 해석**:",
-        c.scores.performance.evidence.aiInterpretation.map((a) => `  - ${a.claim}`).join("\n") || "  - AI 종합 분석 없음"
-      );
-    }
-
-    lines.push("");
   });
 
   lines.push("", "*논문갈피 · 근거 기반 연구 의사결정 지원 서비스*", "");
-
-  return lines.join("\n");
+  return validateMarkdown(lines.join("\n"));
 }
+
+
+
+

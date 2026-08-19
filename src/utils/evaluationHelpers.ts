@@ -1,4 +1,5 @@
-﻿import { PaperCandidate, DimensionScore, EntityType, IdentityStatus, VerificationLevel, RecommendationStatus } from "../types";
+import { PaperCandidate, DimensionScore, EntityType, IdentityStatus, VerificationLevel, RecommendationStatus } from "../types";
+import { CORE_SCORE_KEYS, buildCanonicalPaperEvaluation, calculateCoreEvaluation, getCoreScore, labelStatus, rankCanonicalPapers } from "./paperSemantics";
 
 export type EvaluationStatusType = "COMPLETE" | "PARTIAL" | "HOLD";
 
@@ -23,36 +24,12 @@ export function computePaperEvaluationCoverage(paperOrScores: PaperCandidate | a
   evaluationCoverage: number;
   coverageDisplay: string;
 } {
-  const scores = paperOrScores?.scores ? paperOrScores.scores : paperOrScores;
-  const totalDimensions = 6;
-  if (!scores) {
-    return {
-      scoredDimensions: 0,
-      totalDimensions,
-      evaluationCoverage: 0,
-      coverageDisplay: "0/6 (0%)",
-    };
-  }
-
-  const dimScores = [
-    scores.performance?.score,
-    scores.novelty?.score,
-    scores.trendImportance?.score,
-    scores.academicSignificance?.score,
-    scores.practicalValue?.score,
-    scores.reproducibility?.score,
-  ];
-
-  const validCount = dimScores.filter(
-    (s): s is number => s !== null && s !== undefined && typeof s === "number" && !isNaN(s)
-  ).length;
-
-  const coverage = Math.round((validCount / totalDimensions) * 100);
+  const result = calculateCoreEvaluation(paperOrScores);
   return {
-    scoredDimensions: validCount,
-    totalDimensions,
-    evaluationCoverage: coverage,
-    coverageDisplay: `${validCount}/${totalDimensions} (${coverage}%)`,
+    scoredDimensions: result.validScoresCount,
+    totalDimensions: result.totalDimensions,
+    evaluationCoverage: result.evaluationCoverage,
+    coverageDisplay: result.coverageDisplay,
   };
 }
 
@@ -128,10 +105,12 @@ export function isCandidateEligibleForRecommendation(paper: PaperCandidate): boo
 }
 
 export function getPaperEvaluationStatus(paper: PaperCandidate): PaperEvaluationStatus {
-  const scores = paper.scores;
-  const totalDimensions = 6;
+  const canonical = buildCanonicalPaperEvaluation(paper);
+  const core = canonical.evaluation;
+  const totalDimensions = core.totalAxisCount;
+  const eligibility = checkCandidateRecommendationEligibility(paper);
 
-  if (!scores) {
+  if (canonical.verification.evaluationStatus === "INSUFFICIENT_EVIDENCE" || core.validAxisCount === 0) {
     return {
       status: "HOLD",
       label: "평가 보류",
@@ -142,67 +121,24 @@ export function getPaperEvaluationStatus(paper: PaperCandidate): PaperEvaluation
       validScoresCount: 0,
       totalDimensions,
       evaluationCoverage: 0,
-      coverageDisplay: "0/6 (0%)",
+      coverageDisplay: "0/5 (0%)",
       isRecommendationEligible: false,
-      ineligibilityReason: "평가 점수 미생성",
+      ineligibilityReason: eligibility.reason || "유효 점수 부족",
     };
   }
 
-  const dimScores = [
-    scores.performance?.score,
-    scores.novelty?.score,
-    scores.trendImportance?.score,
-    scores.academicSignificance?.score,
-    scores.practicalValue?.score,
-    scores.reproducibility?.score,
-  ];
-
-  const validScores = dimScores.filter(
-    (s): s is number => s !== null && s !== undefined && typeof s === "number" && !isNaN(s)
-  );
-
-  const coverage = Math.round((validScores.length / totalDimensions) * 100);
-  const coverageDisplay = `${validScores.length}/${totalDimensions} (${coverage}%)`;
-
-  const isNotFound = paper.crossVerificationStatus === "NOT_FOUND" || paper.identityStatus === "IDENTITY_NOT_FOUND";
-  const allInsufficient = Object.values(scores).every(
-    (s) => s.status === "INSUFFICIENT_EVIDENCE" || s.score === null
-  );
-
-  const eligibility = checkCandidateRecommendationEligibility(paper);
-
-  if (isNotFound || validScores.length === 0 || allInsufficient) {
-    return {
-      status: "HOLD",
-      label: "평가 보류",
-      badgeClass: "bg-rose-50 text-rose-700 border-rose-200",
-      overallScore: null,
-      scoreDisplay: "평가 보류",
-      scoreDescription: "충분한 평가 근거를 확보하지 못했습니다.",
-      validScoresCount: 0,
-      totalDimensions,
-      evaluationCoverage: coverage,
-      coverageDisplay,
-      isRecommendationEligible: false,
-      ineligibilityReason: eligibility.reason || "신원 미확정 또는 유효 점수 부족",
-    };
-  }
-
-  const avg = validScores.reduce((a, b) => a + b, 0) / validScores.length;
-  const roundedAvg = Math.round(avg * 10) / 10;
-
-  if (validScores.length === 6) {
+  if (canonical.verification.evaluationStatus === "FULL") {
     return {
       status: "COMPLETE",
       label: "평가 완료",
       badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
-      overallScore: roundedAvg,
-      scoreDisplay: `${roundedAvg.toFixed(1)} / 5.0`,
-      scoreDescription: "6개 평가 축 검증 및 정량 점수 산출 완료",
-      validScoresCount: 6,
+      overallScore: core.overallScore,
+      scoreDisplay: canonical.labels.scoreDisplay,
+      scoreDescription: "5개 평가 축 검증 및 점수 산출 완료",
+      validScoresCount: core.validAxisCount,
       totalDimensions,
       evaluationCoverage: 100,
-      coverageDisplay: "6/6 (100%)",
+      coverageDisplay: "5/5 (100%)",
       isRecommendationEligible: eligibility.isEligible,
       ineligibilityReason: eligibility.reason,
     };
@@ -212,40 +148,38 @@ export function getPaperEvaluationStatus(paper: PaperCandidate): PaperEvaluation
     status: "PARTIAL",
     label: "부분 평가",
     badgeClass: "bg-amber-50 text-amber-700 border-amber-200",
-    overallScore: roundedAvg,
-    scoreDisplay: `${roundedAvg.toFixed(1)} / 5.0`,
-    scoreDescription: `${validScores.length}개 유효 지표 기반 부분 평가 (일부 지표 추가 확인 필요)`,
-    validScoresCount: validScores.length,
+    overallScore: core.overallScore,
+    scoreDisplay: canonical.labels.scoreDisplay,
+    scoreDescription: `${core.validAxisCount}개 유효 지표 기반 부분 평가. 근거가 부족한 항목은 점수 계산에서 제외됩니다.`,
+    validScoresCount: core.validAxisCount,
     totalDimensions,
-    evaluationCoverage: coverage,
-    coverageDisplay,
+    evaluationCoverage: Math.round((core.validAxisCount / totalDimensions) * 100),
+    coverageDisplay: core.coverageDisplay,
     isRecommendationEligible: eligibility.isEligible,
     ineligibilityReason: eligibility.reason,
   };
 }
-
 export function getRadarEligibility(paper: PaperCandidate): {
   isEligible: boolean;
   validCount: number;
   reason: string;
   metrics: {
     topicRelevance: number | null;
-    novelty: number | null;
+    methodNovelty: number | null;
     academicReliability: number | null;
     reproducibility: number | null;
     researchValue: number | null;
   };
 } {
-  const topicRelevance = paper.scores.trendImportance?.score ?? paper.scores.performance?.score ?? null;
-  const novelty = paper.scores.novelty?.score ?? null;
-  const academicReliability = paper.publishingReliabilityScore ?? paper.scores.academicSignificance?.score ?? null;
-  const reproducibility = paper.scores.reproducibility?.score ?? null;
-  const researchValue = paper.scores.practicalValue?.score ?? null;
-
-  const validAxes = [topicRelevance, novelty, academicReliability, reproducibility, researchValue].filter(
-    (s): s is number => s !== null && s !== undefined
-  );
-
+  const canonical = buildCanonicalPaperEvaluation(paper);
+  const metrics = {
+    topicRelevance: canonical.evaluation.topicRelevance,
+    methodNovelty: canonical.evaluation.methodNovelty,
+    academicReliability: canonical.evaluation.academicReliability,
+    reproducibility: canonical.evaluation.reproducibility,
+    researchValue: canonical.evaluation.researchValue,
+  };
+  const validAxes = CORE_SCORE_KEYS.map((key) => metrics[key]).filter((s): s is number => s !== null && s !== undefined);
   const isEligible = validAxes.length >= 3 && paper.crossVerificationStatus !== "NOT_FOUND";
 
   return {
@@ -254,25 +188,18 @@ export function getRadarEligibility(paper: PaperCandidate): {
     reason: isEligible
       ? `${validAxes.length}/5개 평가 축 충족`
       : `평가 근거 부족(${validAxes.length}/5개 축만 유효, 최소 3개 필요)`,
-    metrics: {
-      topicRelevance,
-      novelty,
-      academicReliability,
-      reproducibility,
-      researchValue,
-    },
+    metrics,
   };
 }
-
 export function getScatterEligibility(paper: PaperCandidate): {
   isEligible: boolean;
   x: number | null;
   y: number | null;
   reason: string;
 } {
-  const x = paper.scores.trendImportance?.score ?? paper.scores.performance?.score ?? null;
-  const y = paper.publishingReliabilityScore ?? paper.scores.academicSignificance?.score ?? null;
-
+  const canonical = buildCanonicalPaperEvaluation(paper);
+  const x = canonical.evaluation.topicRelevance;
+  const y = canonical.evaluation.academicReliability;
   const isEligible = x !== null && y !== null && paper.crossVerificationStatus !== "NOT_FOUND";
 
   let reason = "정상 표시";
@@ -288,44 +215,13 @@ export function getScatterEligibility(paper: PaperCandidate): {
 
   return { isEligible, x, y, reason };
 }
-
 export function sortCandidatesByEvaluation(
   candidates: PaperCandidate[],
   aiRecId?: string
 ): PaperCandidate[] {
-  const statusRank: Record<EvaluationStatusType, number> = {
-    COMPLETE: 3,
-    PARTIAL: 2,
-    HOLD: 1,
-  };
-
-  return [...candidates].sort((a, b) => {
-    const statusA = getPaperEvaluationStatus(a);
-    const statusB = getPaperEvaluationStatus(b);
-
-    // 1. Status priority (COMPLETE > PARTIAL > HOLD)
-    const rankDiff = statusRank[statusB.status] - statusRank[statusA.status];
-    if (rankDiff !== 0) return rankDiff;
-
-    // 2. Overall Score (descending)
-    const scoreA = statusA.overallScore ?? -1;
-    const scoreB = statusB.overallScore ?? -1;
-    if (scoreB !== scoreA) return scoreB - scoreA;
-
-    // 3. Valid Scores Count (descending)
-    if (statusB.validScoresCount !== statusA.validScoresCount) {
-      return statusB.validScoresCount - statusA.validScoresCount;
-    }
-
-    // 4. AI Recommended Paper priority
-    if (aiRecId) {
-      if (a.id === aiRecId) return -1;
-      if (b.id === aiRecId) return 1;
-    }
-
-    // 5. Title fallback
-    return a.title.localeCompare(b.title);
-  });
+  void aiRecId;
+  const order = new Map(rankCanonicalPapers(candidates).map((entry, index) => [entry.paperId, index]));
+  return [...candidates].sort((a, b) => (order.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.id) ?? Number.MAX_SAFE_INTEGER));
 }
 
 export function getDefaultComparedCandidateIds(
@@ -364,64 +260,7 @@ export function getDefaultComparedCandidateIds(
 }
 
 export function formatEnumKorean(val: string | undefined | null): string {
-  if (!val) return "미확정";
-
-  const map: Record<string, string> = {
-    VERIFIED: "검증 완료",
-    NOT_FOUND: "확인되지 않음",
-    NEEDS_VERIFICATION: "추가 확인 필요",
-    INSUFFICIENT_EVIDENCE: "근거 부족",
-    SCORED: "평가 완료",
-    SINGLE_SOURCE: "단일 출처",
-    CONFLICTING: "출처 충돌",
-    NOT_CHECKED: "미검증",
-    DIRECTLY_VERIFIED: "직접 검증",
-    PARTIALLY_VERIFIED: "부분 검증",
-    NOT_VERIFIED: "미검증",
-    AVAILABLE_VERIFIED: "공개 확인",
-    AVAILABLE_UNVERIFIED: "공개 미검증",
-    FOUND_UNVERIFIED: "발견됨",
-    AVAILABLE_WITH_RESTRICTIONS: "제한 공개",
-    PARTIALLY_AVAILABLE: "일부 공개",
-    CLAIMED_AVAILABLE: "공개 주장",
-    SEARCH_FAILED: "검색 실패",
-    NOT_FOUND_AFTER_RETRIES: "확인되지 않음",
-    NOT_APPLICABLE: "해당 없음",
-    IDENTITY_VERIFIED: "신원 검증 완료",
-    POSSIBLE_MATCH: "유사 매칭",
-    RESOLVED_FROM_METHOD_OR_PROJECT: "방법/모델명에서 논문 연결",
-    IDENTITY_NOT_FOUND: "신원 미확정",
-    METADATA_CONFLICT: "메타데이터 충돌",
-    PAPER: "논문",
-    METHOD: "방법",
-    MODEL: "모델",
-    PROJECT: "프로젝트",
-    REPOSITORY: "저장소",
-    DATASET: "데이터셋",
-    BENCHMARK: "벤치마크",
-    TOOL: "도구",
-    UNKNOWN: "미분류",
-    EXTERNAL_SOURCE: "외부 출처",
-    AI_INTERPRETATION: "AI 해석",
-    PAPER_REPORTED_VERIFIED: "논문 보고 근거",
-    EXTERNALLY_CORROBORATED: "외부 교차검증",
-    INDEPENDENTLY_REPRODUCED: "독립 재현",
-    REPRODUCIBLE: "재현 가능",
-    PARTIALLY_REPRODUCIBLE: "부분 재현 가능",
-    CODE_ONLY: "코드만 공개",
-    PAPER_ONLY: "논문만 공개",
-    HIGH: "높음",
-    MEDIUM: "중간",
-    LOW: "낮음",
-    PASSED: "통과",
-    FAILED: "실패",
-    NOT_PERFORMED: "미수행",
-    EXTERNAL_BENCHMARK: "외부 벤치마크",
-    INTERNAL_EXPERIMENT: "내부 실험",
-    QUALITATIVE_ONLY: "정성 평가",
-  };
-
-  return map[val] || val;
+  return labelStatus(val);
 }
 export function generatePaperShortLabel(paper: {
   title?: string;
@@ -440,7 +279,7 @@ export function generatePaperShortLabel(paper: {
   }
 
   const title = (paper.canonicalTitle || paper.title || paper.name || "").trim();
-  if (!title) return "?쇰Ц";
+  if (!title) return "논문";
 
   // Check for known prefix before ':' or '?? or '-' or '??
   const colonSplit = title.split(/[:竊싢붴?-]/);
@@ -660,6 +499,11 @@ export function computeScatterCollisionOffsets<T extends { id: string; x: number
 
   return result;
 }
+
+
+
+
+
 
 
 

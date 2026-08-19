@@ -52,7 +52,7 @@ type ScatterDatum = {
 
 const RADAR_AXES = [
   { key: "topicRelevance", label: "주제 적합도" },
-  { key: "novelty", label: "신규성" },
+  { key: "methodNovelty", label: "방법론 신규성" },
   { key: "academicReliability", label: "학술 신뢰도" },
   { key: "reproducibility", label: "재현 가능성" },
   { key: "researchValue", label: "연구 가치" },
@@ -173,7 +173,7 @@ export const CandidateComparison: React.FC<CandidateComparisonProps> = ({
     comparedCandidates.forEach((candidate) => {
       const eligibility = getRadarEligibility(candidate);
       const value = eligibility.metrics[axis.key as keyof typeof eligibility.metrics];
-      row[candidate.id] = value ?? 0;
+      row[candidate.id] = value;
     });
     return row;
   });
@@ -297,3 +297,4 @@ export const CandidateComparison: React.FC<CandidateComparisonProps> = ({
     </section>
   );
 };
+

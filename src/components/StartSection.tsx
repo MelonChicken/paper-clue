@@ -4,8 +4,6 @@ import {
   Copy,
   Check,
   ArrowRight,
-  Zap,
-  Shield,
   Search,
   BookOpen,
   Lightbulb,
@@ -13,10 +11,8 @@ import {
 } from "lucide-react";
 import { SAMPLE_RESEARCH_BRIEFING } from "../data/sampleBriefing";
 
-export type AnalysisMode = "QUICK" | "STANDARD" | "DEEP";
-
 interface StartSectionProps {
-  onStartAnalysis: (markdown: string, mode: AnalysisMode) => void;
+  onStartAnalysis: (markdown: string) => void;
   isLoading: boolean;
 }
 
@@ -87,7 +83,6 @@ export const StartSection: React.FC<StartSectionProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<"have_briefing" | "need_briefing">("have_briefing");
   const [inputText, setInputText] = useState("");
-  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>("STANDARD");
   const [researchTopic, setResearchTopic] = useState("");
   const [generatedPrompt, setGeneratedPrompt] = useState("");
   const [copiedPrompt, setCopiedPrompt] = useState(false);
@@ -117,7 +112,7 @@ export const StartSection: React.FC<StartSectionProps> = ({
   const handleAnalyzeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() || isLoading) return;
-    onStartAnalysis(inputText, analysisMode);
+    onStartAnalysis(inputText);
   };
 
   return (
@@ -197,55 +192,7 @@ export const StartSection: React.FC<StartSectionProps> = ({
               </div>
             )}
           </div>
-
-          <div className="mb-6 bg-slate-50 rounded-xl p-3.5 border border-slate-200">
-            <div className="text-xs font-bold text-slate-700 mb-2">분석 깊이</div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-              <button
-                type="button"
-                onClick={() => setAnalysisMode("QUICK")}
-                className={`p-2.5 rounded-lg border text-left transition-all ${
-                  analysisMode === "QUICK" ? "bg-amber-50 border-amber-500 text-amber-950 font-medium" : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-                }`}
-              >
-                <div className="flex items-center justify-between font-bold text-amber-900 mb-0.5">
-                  <span className="flex items-center gap-1"><Zap className="w-3.5 h-3.5 text-amber-600" />빠르게</span>
-                  <span className="text-[11px] font-normal text-amber-700">약 15초</span>
-                </div>
-                <div className="text-[11px] text-slate-500">후보와 핵심 정보만 빠르게 확인</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setAnalysisMode("STANDARD")}
-                className={`p-2.5 rounded-lg border text-left transition-all ${
-                  analysisMode === "STANDARD" ? "bg-indigo-50 border-indigo-600 text-indigo-950 font-medium" : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-                }`}
-              >
-                <div className="flex items-center justify-between font-bold text-indigo-900 mb-0.5">
-                  <span className="flex items-center gap-1"><Shield className="w-3.5 h-3.5 text-indigo-600" />표준</span>
-                  <span className="text-[11px] font-normal text-indigo-700">약 35초</span>
-                </div>
-                <div className="text-[11px] text-slate-500">여러 출처를 교차 확인해 종합 평가</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setAnalysisMode("DEEP")}
-                className={`p-2.5 rounded-lg border text-left transition-all ${
-                  analysisMode === "DEEP" ? "bg-purple-50 border-purple-600 text-purple-950 font-medium" : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-                }`}
-              >
-                <div className="flex items-center justify-between font-bold text-purple-900 mb-0.5">
-                  <span className="flex items-center gap-1"><Bookmark className="w-3.5 h-3.5 text-purple-600" />자세히</span>
-                  <span className="text-[11px] font-normal text-purple-700">약 60초</span>
-                </div>
-                <div className="text-[11px] text-slate-500">논문 내용과 방법론까지 자세히 분석</div>
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
             <button
               type="button"
               onClick={() => setActiveTab("need_briefing")}

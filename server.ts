@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
@@ -6,7 +6,6 @@ import { runAnalysisPipeline } from "./server/pipeline/orchestrator";
 import { generateMarkdownReport } from "./server/pipeline/markdownReportGenerator";
 import { generateFallbackAnalysis } from "./server/fallbackAnalyzer";
 import { globalUsageStore } from "./server/observability/usageStore";
-import { AnalysisMode } from "./server/observability/types";
 import { getAIProvider } from "./server/pipeline/getProvider";
 import { AIProvider } from "./server/pipeline/providerInterface";
 
@@ -20,17 +19,14 @@ app.use(express.json({ limit: "10mb" }));
 // POST /api/analyze-briefing
 app.post("/api/analyze-briefing", async (req, res) => {
   try {
-    const { briefingMarkdown, forceRefresh, mode, analysisMode: reqAnalysisMode } = req.body;
+    const { briefingMarkdown, forceRefresh } = req.body;
 
     if (!briefingMarkdown || typeof briefingMarkdown !== "string") {
       return res.status(400).json({
         success: false,
-        error: "연구 브리핑 Markdown 텍스트가 필요합니다.",
+        error: "?곌뎄 釉뚮━??Markdown ?띿뒪?멸? ?꾩슂?⑸땲??",
       });
     }
-
-    const rawMode = reqAnalysisMode || mode;
-    const analysisMode: AnalysisMode = ["QUICK", "STANDARD", "DEEP"].includes(rawMode) ? rawMode : "STANDARD";
 
     let provider: AIProvider | null = null;
     try {
@@ -48,15 +44,14 @@ app.post("/api/analyze-briefing", async (req, res) => {
     const data = await runAnalysisPipeline(
       provider,
       briefingMarkdown,
-      Boolean(forceRefresh),
-      analysisMode
+      Boolean(forceRefresh)
     );
     return res.json({ success: true, data });
   } catch (err: any) {
     console.error("Error analyzing briefing:", err);
     return res.status(500).json({
       success: false,
-      error: "연구 브리핑 분석 중 오류가 발생했습니다.",
+      error: "?곌뎄 釉뚮━??遺꾩꽍 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.",
       details: err?.message || String(err),
     });
   }
@@ -122,3 +117,5 @@ async function startServer() {
 }
 
 startServer();
+
+

@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { PaperCandidate, CandidateUserStatus } from "../types";
 import {
   ExternalLink,
@@ -22,6 +22,7 @@ import {
   formatEnumKorean,
   sortCandidatesByEvaluation,
 } from "../utils/evaluationHelpers";
+import { CORE_SCORE_KEYS, CORE_SCORE_LABELS, buildCanonicalPaperEvaluation, rankCanonicalPapers } from "../utils/paperSemantics";
 
 interface CandidateCardsProps {
   candidates: PaperCandidate[];
@@ -54,8 +55,9 @@ export const CandidateCards: React.FC<CandidateCardsProps> = ({
     );
   };
 
-  // Sort candidates by evaluation ranking (Complete evaluations first, higher score first, AI rec prioritized)
+  // Sort candidates through the shared canonical ranking helper. AI recommendation remains a separate badge.
   const sortedCandidates = sortCandidatesByEvaluation(candidates, aiRecommendedId);
+  const rankingByPaperId = new Map(rankCanonicalPapers(candidates).map((entry) => [entry.paperId, entry]));
 
   return (
     <section id="candidate-cards" className="mb-8 space-y-4">
@@ -88,44 +90,16 @@ export const CandidateCards: React.FC<CandidateCardsProps> = ({
 
           const evalStatus = getPaperEvaluationStatus(paper);
           const radarEligibility = getRadarEligibility(paper);
-          const rank = idx + 1;
-
-          const topicScore = paper.scores.trendImportance?.score ?? paper.scores.performance?.score ?? null;
-          const noveltyScore = paper.scores.novelty?.score ?? null;
-          const reliabilityScore = paper.publishingReliabilityScore ?? paper.scores.academicSignificance?.score ?? null;
-          const reproducibilityScore = paper.scores.reproducibility?.score ?? null;
-
-          const isPeerReviewed =
-            paper.publishingReliabilityDetails?.peerReviewed === true ||
-            paper.publicationStatus?.toLowerCase().includes("peer") ||
-            paper.publicationStatus?.toLowerCase().includes("published");
-
-          const isPreprint =
-            paper.publishingReliabilityDetails?.isPreprint === true ||
-            paper.publicationStatus?.toLowerCase().includes("preprint") ||
-            Boolean(paper.arxivId) ||
-            Boolean(paper.biorxivId);
-
-          const isCodeAvailable =
-            paper.codeStatus === "AVAILABLE_VERIFIED" ||
-            paper.codeStatus === "AVAILABLE_UNVERIFIED" ||
-            paper.codeStatus === "PARTIALLY_AVAILABLE" ||
-            paper.codeAvailable === true ||
-            Boolean(paper.codeUrl);
-
-          const isDataAvailable =
-            paper.dataStatus === "AVAILABLE_VERIFIED" ||
-            paper.dataStatus === "AVAILABLE_WITH_RESTRICTIONS" ||
-            paper.dataStatus === "PARTIALLY_AVAILABLE" ||
-            paper.dataAvailable === true ||
-            Boolean(paper.dataUrl);
-
+          const ranking = rankingByPaperId.get(paper.id);
+          const rank = ranking?.rank || idx + 1;
+          const rankLabel = ranking?.rankLabel || `${rank}위`;
+          const canonical = buildCanonicalPaperEvaluation(paper);
           const isNotFound = paper.crossVerificationStatus === "NOT_FOUND";
           const needsVerification =
             isNotFound ||
             paper.crossVerificationStatus === "CONFLICTING" ||
-            Object.values(paper.scores).some((s) => s.score === null || s.status === "NEEDS_VERIFICATION") ||
-            (paper.uncertainty?.factVerificationItems?.length || 0) > 0;
+            canonical.uncertainty.factVerification.length > 0 ||
+            canonical.uncertainty.insufficientEvidence.length > 0;
 
           return (
             <article
@@ -156,9 +130,9 @@ export const CandidateCards: React.FC<CandidateCardsProps> = ({
                         : "bg-white text-slate-600 border-slate-200"
                     }`}
                   >
-                    종합 {rank}위</span>
+                    종합 {rankLabel}</span>
                   <span className="font-semibold text-slate-700">{paper.venueOrPreprint}</span>
-                  <span className="text-slate-400">쨌</span>
+                  <span className="text-slate-400">·</span>
                   <span className="text-slate-500">{paper.year}</span>
                 </div>
 
@@ -199,33 +173,26 @@ export const CandidateCards: React.FC<CandidateCardsProps> = ({
 
                     {/* Status Badges */}
                     <div className="flex flex-wrap gap-1.5 pt-1">
-                      {isPeerReviewed && (
+                      {canonical.verification.publicationStatus === "PEER_REVIEWED" ? (
                         <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center space-x-1">
                           <ShieldCheck className="w-3 h-3" />
-                          <span>동료심사 완료</span>
+                          <span>{canonical.labels.publicationStatus}</span>
                         </span>
-                      )}
-
-                      {isPreprint && (
+                      ) : (
                         <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                          프리프린트 ({paper.versionInfo?.version || "v1"})
+                          {canonical.labels.publicationDisplay}
                         </span>
                       )}
 
-                      {isCodeAvailable && (
-                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center space-x-1">
-                          <Code className="w-3 h-3" />
-                          <span>코드: {formatEnumKorean(paper.codeStatus)}</span>
-                        </span>
-                      )}
+                      <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center space-x-1">
+                        <Code className="w-3 h-3" />
+                        <span>코드: {canonical.labels.codeStatus}</span>
+                      </span>
 
-                      {isDataAvailable && (
-                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 inline-flex items-center space-x-1">
-                          <Database className="w-3 h-3" />
-                          <span>데이터셋: {formatEnumKorean(paper.dataStatus)}</span>
-                        </span>
-                      )}
-
+                      <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 inline-flex items-center space-x-1">
+                        <Database className="w-3 h-3" />
+                        <span>데이터셋: {canonical.labels.dataStatus}</span>
+                      </span>
                       {needsVerification && (
                         <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 inline-flex items-center space-x-1">
                           <AlertTriangle className="w-3 h-3" />
@@ -254,31 +221,18 @@ export const CandidateCards: React.FC<CandidateCardsProps> = ({
                       {evalStatus.scoreDescription}
                     </p>
 
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 pt-1 text-[11px]">
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span>주제 적합도</span>
-                        <span className="font-bold text-slate-900">
-                          {topicScore !== null ? `${topicScore}점` : "근거 부족"}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span>신규성</span>
-                        <span className="font-bold text-slate-900">
-                          {noveltyScore !== null ? `${noveltyScore}점` : "근거 부족"}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span>학술 신뢰도</span>
-                        <span className="font-bold text-slate-900">
-                          {reliabilityScore !== null ? `${reliabilityScore}점` : "근거 부족"}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span>재현성</span>
-                        <span className="font-bold text-slate-900">
-                          {reproducibilityScore !== null ? `${reproducibilityScore}점` : "근거 부족"}
-                        </span>
-                      </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1.5 pt-1 text-[11px]">
+                      {CORE_SCORE_KEYS.map((key) => {
+                        const score = canonical.evaluation[key];
+                        return (
+                          <div key={key} className="flex items-center justify-between text-slate-600 gap-3">
+                            <span>{CORE_SCORE_LABELS[key]}</span>
+                            <span className="font-bold text-slate-900">
+                              {score !== null ? `${score}점` : "근거 부족"}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -439,8 +393,8 @@ export const CandidateCards: React.FC<CandidateCardsProps> = ({
                         논문 본문, 표, 공식 부록에서 직접 추출한 사실
                       </p>
                       <ul className="space-y-1 text-slate-800 text-[11px] pl-3 list-disc">
-                        {paper.scores.performance.evidence.paperText.length > 0 ? (
-                          paper.scores.performance.evidence.paperText.slice(0, 2).map((item, i) => (
+                        {canonical.evidence.paperEvidence.length > 0 ? (
+                          canonical.evidence.paperEvidence.slice(0, 2).map((item, i) => (
                             <li key={i}>
                               <span className="font-semibold text-blue-950">[{item.sourceLocation || "본문"}]:</span>{" "}
                               {item.claim}
@@ -468,8 +422,8 @@ export const CandidateCards: React.FC<CandidateCardsProps> = ({
                         공식 학회 DB, arXiv, GitHub 등 교차검증 정보
                       </p>
                       <ul className="space-y-1 text-slate-800 text-[11px] pl-3 list-disc">
-                        {paper.scores.performance.evidence.externalSource.length > 0 ? (
-                          paper.scores.performance.evidence.externalSource.slice(0, 2).map((item, i) => (
+                        {canonical.evidence.externalEvidence.length > 0 ? (
+                          canonical.evidence.externalEvidence.slice(0, 2).map((item, i) => (
                             <li key={i}>
                               <span className="font-semibold text-emerald-950">[{item.sourceTitle}]:</span>{" "}
                               {item.claim}
@@ -497,8 +451,8 @@ export const CandidateCards: React.FC<CandidateCardsProps> = ({
                         원문과 외부 출처를 종합한 AI 분석 의견
                       </p>
                       <ul className="space-y-1 text-slate-800 text-[11px] pl-3 list-disc">
-                        {paper.scores.performance.evidence.aiInterpretation.length > 0 ? (
-                          paper.scores.performance.evidence.aiInterpretation.slice(0, 2).map((item, i) => (
+                        {canonical.evidence.aiInterpretation.length > 0 ? (
+                          canonical.evidence.aiInterpretation.slice(0, 2).map((item, i) => (
                             <li key={i}>{item.claim}</li>
                           ))
                         ) : evalStatus.status === "HOLD" ? (
@@ -507,7 +461,7 @@ export const CandidateCards: React.FC<CandidateCardsProps> = ({
                           </li>
                         ) : (
                           <li className="text-slate-500 italic list-none -ml-3">
-                            종합 분석 의견 생성 대기 중
+                            평가 축별 종합 해석은 전체 근거 모달에서 확인할 수 있습니다.
                           </li>
                         )}
                       </ul>
@@ -522,14 +476,14 @@ export const CandidateCards: React.FC<CandidateCardsProps> = ({
                         <span>추가 확인 필요 사항:</span>
                       </div>
                       <ul className="list-disc pl-4 space-y-0.5 text-amber-900">
-                        {paper.uncertainty.factVerificationItems.slice(0, 2).map((v, i) => (
+                        {canonical.uncertainty.factVerification.slice(0, 2).map((v, i) => (
                           <li key={i}>{v}</li>
                         ))}
-                        {paper.uncertainty.insufficientEvidenceItems.slice(0, 2).map((v, i) => (
+                        {canonical.uncertainty.insufficientEvidence.slice(0, 2).map((v, i) => (
                           <li key={`ins-${i}`}>{v}</li>
                         ))}
-                        {paper.uncertainty.factVerificationItems.length === 0 &&
-                          paper.uncertainty.insufficientEvidenceItems.length === 0 && (
+                        {canonical.uncertainty.factVerification.length === 0 &&
+                          canonical.uncertainty.insufficientEvidence.length === 0 && (
                             <li className="text-slate-500 italic">특이 미확정 항목 없음</li>
                           )}
                       </ul>
@@ -544,5 +498,9 @@ export const CandidateCards: React.FC<CandidateCardsProps> = ({
     </section>
   );
 };
+
+
+
+
 
 

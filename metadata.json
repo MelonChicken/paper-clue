@@ -1,0 +1,10 @@
+﻿{
+    "name":  "논문갈피",
+    "description":  "AI 연구 브리핑 속 논문 후보를 검증하고 비교해 이번 주 읽을 논문 선택을 돕는 연구 의사결정 지원 서비스",
+    "requestFramePermissions":  [
+
+                                ],
+    "majorCapabilities":  [
+                              "MAJOR_CAPABILITY_SERVER_SIDE_OPENAI_API"
+                          ]
+}

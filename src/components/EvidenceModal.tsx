@@ -2,6 +2,7 @@
 import { PaperCandidate, GroundedEvidence, GroundedEvidenceItem } from "../types";
 import { X, BookOpen, Globe, FileText, ExternalLink, ShieldAlert, CheckCircle, AlertTriangle, HelpCircle, GitCompare } from "lucide-react";
 import { formatEnumKorean, getPaperEvaluationStatus } from "../utils/evaluationHelpers";
+import { CORE_SCORE_LABELS, CoreScoreKey, buildCanonicalPaperEvaluation, getCoreScore } from "../utils/paperSemantics";
 
 interface EvidenceModalProps {
   paper: PaperCandidate | null;
@@ -10,27 +11,35 @@ interface EvidenceModalProps {
 }
 
 const DIMENSION_TITLE_MAP: Record<string, string> = {
-  performance: "성능 경쟁력",
-  novelty: "방법론 신규성",
-  trendImportance: "연구 흐름 중요도",
-  academicSignificance: "학술 유의미성",
-  practicalValue: "실무·연구 적용 가치",
+  topicRelevance: "주제 적합도",
+  methodNovelty: "방법론 신규성",
+  researchValue: "연구 가치",
+  academicReliability: "학술 신뢰도",
   reproducibility: "재현 가능성",
 };
 
 export const EvidenceModal: React.FC<EvidenceModalProps> = ({ paper, dimensionKey, onClose }) => {
   if (!paper) return null;
 
-  const dimTitle = dimensionKey ? DIMENSION_TITLE_MAP[dimensionKey] || dimensionKey : "전체 평가 근거";
+  const canonical = buildCanonicalPaperEvaluation(paper);
+  const coreKey = dimensionKey as CoreScoreKey | undefined;
+  const dimTitle = coreKey && CORE_SCORE_LABELS[coreKey] ? CORE_SCORE_LABELS[coreKey] : "전체 평가 근거";
   const currentScoreObj = dimensionKey
-    ? paper.scores[dimensionKey as keyof typeof paper.scores]
-    : paper.scores.novelty;
+    ? getCoreScore(paper, dimensionKey as any) || paper.scores[dimensionKey as keyof typeof paper.scores]
+    : getCoreScore(paper, "methodNovelty") || paper.scores.novelty;
 
   const evidence: GroundedEvidence = currentScoreObj?.evidence || {
-    paperText: [],
-    externalSource: [],
-    aiInterpretation: [],
+    paperText: canonical.evidence.paperEvidence,
+    externalSource: canonical.evidence.externalEvidence,
+    aiInterpretation: canonical.evidence.aiInterpretation,
   };
+  const aiRationales = Object.entries(canonical.interpretation.evaluationRationales).map(([key, reason]) => ({
+    evidenceType: "AI_INTERPRETATION" as const,
+    sourceTitle: "AI 종합 해석",
+    sourceLocation: CORE_SCORE_LABELS[key as CoreScoreKey],
+    claim: reason || "추가 확인 필요",
+    verificationStatus: "PARTIALLY_VERIFIED" as const,
+  }));
 
   const isNotFound = paper.crossVerificationStatus === "NOT_FOUND";
   const evalStatus = getPaperEvaluationStatus(paper);
@@ -138,6 +147,27 @@ export const EvidenceModal: React.FC<EvidenceModalProps> = ({ paper, dimensionKe
             <p className="leading-relaxed">{currentScoreObj?.reason || currentScoreObj?.notes || "해당 항목에 대한 추가 설명이 없습니다."}</p>
           </div>
 
+
+          {canonical.evidenceClaims.length > 0 && (
+            <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/70 space-y-2">
+              <div className="flex items-center space-x-2 text-slate-900 font-bold text-xs">
+                <CheckCircle className="w-4 h-4 text-emerald-600" />
+                <span>Canonical Claim 상태</span>
+              </div>
+              <ul className="space-y-1.5 text-xs text-slate-800">
+                {canonical.evidenceClaims
+                  .filter((claim) => claim.type === "QUANTITATIVE_RESULT" || claim.type === "BASELINE_COMPARISON" || claim.verificationStatus === "UNVERIFIED")
+                  .slice(0, 5)
+                  .map((claim) => (
+                    <li key={claim.id} className="bg-white p-2.5 rounded-lg border border-slate-200">
+                      <span className="font-bold text-slate-700">{claim.verificationStatus === "VERIFIED" ? "검증됨" : claim.verificationStatus === "PARTIAL" ? "부분 확인" : "원문 확인 필요"}</span>
+                      {claim.metric && <span className="ml-1 text-indigo-700 font-semibold">{claim.metric.name}{claim.metric.value ? ` ${claim.metric.value}` : ""}{claim.metric.unit ? ` ${claim.metric.unit}` : ""}</span>}
+                      <span className="block mt-0.5 text-slate-700">{claim.claim}</span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
           <div className="border border-blue-200 rounded-xl p-4 bg-blue-50/40 space-y-2">
             <div className="flex items-center space-x-2 text-blue-900 font-bold text-xs">
               <BookOpen className="w-4 h-4 text-blue-600" />
@@ -174,8 +204,8 @@ export const EvidenceModal: React.FC<EvidenceModalProps> = ({ paper, dimensionKe
               <span>3. AI 종합 해석</span>
             </div>
             <p className="text-[11px] text-purple-800/80 mb-2">논문 원문과 외부 검증 자료를 바탕으로 한 AI의 분석 의견입니다. 논문 자체의 직접 주장과 구분됩니다.</p>
-            {evidence.aiInterpretation.length > 0 ? (
-              <ul className="space-y-2.5 text-xs text-slate-800">{evidence.aiInterpretation.map((item, idx) => renderItem(item, "AI 종합 분석", `aiInterp-${idx}`))}</ul>
+            {(evidence.aiInterpretation.length > 0 || aiRationales.length > 0) ? (
+              <ul className="space-y-2.5 text-xs text-slate-800">{(evidence.aiInterpretation.length > 0 ? evidence.aiInterpretation : aiRationales).map((item, idx) => renderItem(item, "AI 종합 분석", `aiInterp-${idx}`))}</ul>
             ) : evalStatus.status === "HOLD" ? (
               <p className="text-xs text-rose-600 font-medium bg-white p-2.5 rounded-lg border border-rose-200">근거 부족으로 정량 평가를 수행하지 않았습니다.</p>
             ) : (
@@ -258,29 +288,29 @@ export const EvidenceModal: React.FC<EvidenceModalProps> = ({ paper, dimensionKe
                 <span>불확실성 및 추가 검증 사항</span>
               </div>
 
-              {paper.uncertainty.factVerificationItems.length > 0 && (
+              {canonical.uncertainty.factVerification.length > 0 && (
                 <div>
                   <strong className="font-bold text-amber-900 text-[11px]">사실 확인 필요:</strong>
                   <ul className="list-disc pl-5 space-y-0.5 mt-0.5 text-amber-800">
-                    {paper.uncertainty.factVerificationItems.map((v, i) => <li key={`fact-verif-${paper.id}-${i}`}>{v}</li>)}
+                    {canonical.uncertainty.factVerification.map((v, i) => <li key={`fact-verif-${paper.id}-${i}`}>{v}</li>)}
                   </ul>
                 </div>
               )}
 
-              {paper.uncertainty.insufficientEvidenceItems.length > 0 && (
+              {canonical.uncertainty.insufficientEvidence.length > 0 && (
                 <div>
                   <strong className="font-bold text-amber-900 text-[11px]">평가 근거 부족:</strong>
                   <ul className="list-disc pl-5 space-y-0.5 mt-0.5 text-amber-800">
-                    {paper.uncertainty.insufficientEvidenceItems.map((i, idx) => <li key={`insuff-evid-${paper.id}-${idx}`}>{i}</li>)}
+                    {canonical.uncertainty.insufficientEvidence.map((i, idx) => <li key={`insuff-evid-${paper.id}-${idx}`}>{i}</li>)}
                   </ul>
                 </div>
               )}
 
-              {paper.uncertainty.researchOpenQuestions.length > 0 && (
+              {canonical.uncertainty.openQuestions.length > 0 && (
                 <div>
                   <strong className="font-bold text-amber-900 text-[11px]">추가 연구 질문:</strong>
                   <ul className="list-disc pl-5 space-y-0.5 mt-0.5 text-amber-800">
-                    {paper.uncertainty.researchOpenQuestions.map((q, idx) => <li key={`open-q-${paper.id}-${idx}`}>{q}</li>)}
+                    {canonical.uncertainty.openQuestions.map((q, idx) => <li key={`open-q-${paper.id}-${idx}`}>{q}</li>)}
                   </ul>
                 </div>
               )}
@@ -297,3 +327,8 @@ export const EvidenceModal: React.FC<EvidenceModalProps> = ({ paper, dimensionKe
     </div>
   );
 };
+
+
+
+
+

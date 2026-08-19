@@ -1,5 +1,6 @@
 ﻿import React from "react";
 import { BriefingAnalysisResponse } from "../types";
+import { buildCanonicalPaperEvaluations } from "../utils/paperSemantics";
 import {
   FileText,
   ShieldCheck,
@@ -15,50 +16,16 @@ interface ResearchOverviewProps {
 
 export const ResearchOverview: React.FC<ResearchOverviewProps> = ({ data }) => {
   const candidates = data.candidates || [];
-  const papersAnalyzed = candidates.length;
+  const canonicalPapers = buildCanonicalPaperEvaluations(candidates, data.aiRecommendation);
+  const papersAnalyzed = canonicalPapers.length;
 
-  const peerReviewedCount = candidates.filter(
-    (c) =>
-      c.publishingReliabilityDetails?.peerReviewed === true ||
-      c.publicationStatus?.toLowerCase().includes("peer") ||
-      c.publicationStatus?.toLowerCase().includes("published")
+  const peerReviewedCount = canonicalPapers.filter((c) => c.verification.publicationStatus === "PEER_REVIEWED").length;
+  const preprintsCount = canonicalPapers.filter((c) => c.verification.publicationStatus === "PREPRINT").length;
+  const codeAvailableCount = canonicalPapers.filter((c) => c.verification.codeStatus === "CODE_AVAILABLE_VERIFIED").length;
+  const datasetAvailableCount = canonicalPapers.filter((c) => c.verification.dataStatus === "PUBLIC_DATASET_VERIFIED").length;
+  const needsVerificationCount = canonicalPapers.filter(
+    (c) => c.uncertainty.factVerification.length > 0 || c.uncertainty.insufficientEvidence.length > 0 || c.verification.evaluationStatus === "INSUFFICIENT_EVIDENCE"
   ).length;
-
-  const preprintsCount = candidates.filter(
-    (c) =>
-      c.publishingReliabilityDetails?.isPreprint === true ||
-      c.publicationStatus?.toLowerCase().includes("preprint") ||
-      c.arxivId ||
-      c.biorxivId
-  ).length;
-
-  const codeAvailableCount = candidates.filter(
-    (c) =>
-      c.codeStatus === "AVAILABLE_VERIFIED" ||
-      c.codeStatus === "AVAILABLE_UNVERIFIED" ||
-      c.codeStatus === "PARTIALLY_AVAILABLE" ||
-      c.codeAvailable === true ||
-      Boolean(c.codeUrl)
-  ).length;
-
-  const datasetAvailableCount = candidates.filter(
-    (c) =>
-      c.dataStatus === "AVAILABLE_VERIFIED" ||
-      c.dataStatus === "AVAILABLE_WITH_RESTRICTIONS" ||
-      c.dataStatus === "PARTIALLY_AVAILABLE" ||
-      c.dataAvailable === true ||
-      Boolean(c.dataUrl)
-  ).length;
-
-  const needsVerificationCount = candidates.reduce((acc, c) => {
-    const unverifiedScores = Object.values(c.scores).filter(
-      (s) => s.score === null || s.status === "NEEDS_VERIFICATION"
-    ).length;
-    const factItems = c.uncertainty?.factVerificationItems?.length || 0;
-    const insuffItems = c.uncertainty?.insufficientEvidenceItems?.length || 0;
-    return acc + (unverifiedScores > 0 || factItems > 0 || insuffItems > 0 ? 1 : 0);
-  }, 0);
-
   const metrics = [
     {
       label: "분석된 논문",
@@ -150,3 +117,4 @@ export const ResearchOverview: React.FC<ResearchOverviewProps> = ({ data }) => {
     </section>
   );
 };
+

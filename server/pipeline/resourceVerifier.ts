@@ -1,4 +1,4 @@
-import { z } from "zod";
+﻿import { z } from "zod";
 import { VerifiedMetadataResult, VerifiedResourcesResult } from "./types";
 import { getRouteConfig } from "../config/routingConfig";
 import { logPipelineCall } from "../observability/pipelineLogger";
@@ -130,7 +130,7 @@ export async function verifyPaperResources(
         executionVerification: "NOT_PERFORMED",
         level: "PAPER_ONLY",
         score: 1,
-        reason: "논문 신원 미확인(NOT_FOUND)으로 자원 검증 대상 제외.",
+        reason: "논문 신원이 확인되지 않아 자원 검증 대상에서 제외했습니다.",
       },
       evidence: [],
     };
@@ -216,7 +216,7 @@ Mentioned Data URL: ${mentionedDataUrl || "N/A"}
     }
 
     if (mentionedCodeUrl && ["NOT_FOUND", "NOT_FOUND_AFTER_RETRIES", "SEARCH_FAILED"].includes(codeStatus)) {
-      codeStatus = "AVAILABLE_VERIFIED";
+      codeStatus = "FOUND_UNVERIFIED";
       codeUrl = mentionedCodeUrl;
     }
     if (mentionedDataUrl && ["NOT_FOUND", "NOT_FOUND_AFTER_RETRIES", "SEARCH_FAILED"].includes(dataStatus)) {
@@ -224,9 +224,23 @@ Mentioned Data URL: ${mentionedDataUrl || "N/A"}
       dataUrl = mentionedDataUrl;
     }
 
+    const benchmarkHint = /benchmark|dataset|imagenet|coco|kinetics|ucf|hmdb|robosuite|robotwin|mnist|cifar/i.test(
+      `${metadata.normalizedTitle} ${(parsed.evidence || []).map((e: any) => e.claim).join(" ")}`
+    );
+    if (benchmarkHint && dataStatus === "NOT_APPLICABLE") {
+      dataStatus = "FOUND_UNVERIFIED";
+    }
+
+    if (codeStatus === "AVAILABLE_VERIFIED") codeStatus = "CODE_AVAILABLE_VERIFIED" as any;
+    else if (codeStatus === "FOUND_UNVERIFIED") codeStatus = "REPOSITORY_FOUND" as any;
+
+    if (dataStatus === "AVAILABLE_VERIFIED") dataStatus = "PUBLIC_DATASET_VERIFIED" as any;
+    else if (dataStatus === "FOUND_UNVERIFIED" && benchmarkHint) dataStatus = "PUBLIC_BENCHMARK_USED" as any;
+    else if (dataStatus === "FOUND_UNVERIFIED") dataStatus = "DATASET_LINK_NOT_VERIFIED" as any;
+
     let reproducibilityLevel = parsed.reproducibilityLevel || "NOT_VERIFIED";
-    const isDataMissing = ["NOT_FOUND", "NOT_FOUND_AFTER_RETRIES", "SEARCH_FAILED"].includes(dataStatus);
-    const isCodeAvailable = ["AVAILABLE_VERIFIED", "FOUND_UNVERIFIED", "PARTIALLY_AVAILABLE"].includes(codeStatus);
+    const isDataMissing = ["NOT_FOUND", "NOT_FOUND_AFTER_RETRIES", "SEARCH_FAILED", "PRIVATE_OR_UNAVAILABLE"].includes(dataStatus);
+    const isCodeAvailable = ["CODE_AVAILABLE_VERIFIED", "REPOSITORY_FOUND", "AVAILABLE_VERIFIED", "FOUND_UNVERIFIED", "PARTIALLY_AVAILABLE"].includes(codeStatus);
     const executionVerification = parsed.executionVerification || "NOT_PERFORMED";
 
     if (executionVerification !== "PASSED" && reproducibilityLevel === "REPRODUCIBLE") {
@@ -240,8 +254,8 @@ Mentioned Data URL: ${mentionedDataUrl || "N/A"}
 
     const score = isCodeAvailable && !isDataMissing ? 4 : isCodeAvailable ? 3 : 1;
     const reason = isCodeAvailable
-      ? `공식 코드(${codeUrl || '공개 소스'}) 및 자원 검증 완료.`
-      : "공식 코드 및 체크포인트 미확인 상태.";
+      ? '코드 저장소는 확인되었으나 실행 검증, 학습 설정, 데이터 준비 절차는 별도 확인이 필요합니다.'
+      : '공식 코드 저장소, checkpoint, 실행 환경을 확인하지 못했습니다.';
 
     await logPipelineCall({
       analysisRunId: context.analysisRunId,
@@ -280,10 +294,10 @@ Mentioned Data URL: ${mentionedDataUrl || "N/A"}
       },
       evidence: (parsed.evidence || []).map((e) => ({
         evidenceType: (["PAPER", "EXTERNAL", "AI_INTERPRETATION"].includes(e.evidenceType) ? e.evidenceType : "EXTERNAL") as any,
-        sourceTitle: e.sourceTitle || "자원 검증 출처",
+        sourceTitle: e.sourceTitle || "외부 출처",
         sourceUrl: e.sourceUrl || null,
         sourceLocation: e.sourceLocation || "GitHub / Dataset Archive",
-        claim: e.claim || "코드/데이터 자원 검증 완료",
+        claim: e.claim || "코드 또는 데이터 출처 확인",
         verificationStatus: (["DIRECTLY_VERIFIED", "PARTIALLY_VERIFIED", "NOT_VERIFIED"].includes(e.verificationStatus) ? e.verificationStatus : "DIRECTLY_VERIFIED") as any,
       })),
     };
@@ -350,9 +364,14 @@ Mentioned Data URL: ${mentionedDataUrl || "N/A"}
         executionVerification: "NOT_PERFORMED",
         level,
         score: 2,
-        reason: `자원 탐색 실패로 기본 상태 설정: ${err?.message || '검색 제한'}`,
+        reason: `자원 검증 실패로 기본 상태를 설정했습니다: ${err?.message || '검색 제한'}`,
       },
       evidence: [],
     };
   }
 }
+
+
+
+
+

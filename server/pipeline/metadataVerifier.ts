@@ -1,4 +1,4 @@
-import { z } from "zod";
+﻿import { z } from "zod";
 import { ExtractedPaperDraft, VerifiedMetadataResult } from "./types";
 import { getRouteConfig } from "../config/routingConfig";
 import { logPipelineCall } from "../observability/pipelineLogger";
@@ -8,6 +8,7 @@ import { persistentCache, generatePaperCacheKey, CACHE_TTL } from "./cacheManage
 import { AIProvider } from "./providerInterface";
 import { resolveCandidateIdentity, validateCanonicalIdentity, calculateFuzzyScore, normalizeTitle } from "./candidateResolver";
 import { EntityType, IdentityStatus, SourceType, VerificationLevel } from "../../src/types";
+import { normalizePublicationStatus } from "../../src/utils/paperSemantics";
 
 export interface PaperSearchContext {
   paperId: string;
@@ -341,9 +342,9 @@ Deterministic Knowledge Baseline:
     const processedEvidence = (parsed.evidence || []).map((e: any) => {
       const srcType: SourceType = (e.sourceType || "PAPER") as SourceType;
       const verLevel: VerificationLevel = (e.verificationLevel || (srcType === "PAPER" ? "PAPER_REPORTED_VERIFIED" : "EXTERNALLY_CORROBORATED")) as VerificationLevel;
-      const claimStr = e.claimText || "?�문 메�??�이??검�??�료";
-      const srcTitle = e.sourceReference || (srcType === "PAPER" ? "?�문 ?�문" : "공식 ?�술 출처");
-      const srcLoc = e.evidenceLocation || (srcType === "PAPER" ? "Abstract / Section 1" : "공식 ?�술 ?�사?�트");
+      const claimStr = e.claimText || "논문 서지 정보 확인";
+      const srcTitle = e.sourceReference || (srcType === "PAPER" ? "논문 원문" : "공식 학술 출처");
+      const srcLoc = e.evidenceLocation || (srcType === "PAPER" ? "Abstract / Section 1" : "공식 출처");
 
       return {
         evidenceType: (srcType === "PAPER" ? "PAPER" : srcType === "AI_INTERPRETATION" ? "AI_INTERPRETATION" : "EXTERNAL") as any,
@@ -367,10 +368,10 @@ Deterministic Knowledge Baseline:
         sourceTitle: finalCanonicalTitle,
         sourceReference: finalCanonicalTitle,
         sourceUrl: finalUrl,
-        sourceLocation: "?�문 ?��? ?�보",
-        evidenceLocation: "?�문 ?��? ?�보",
-        claim: `공식 ?�문 ?��? ?�별 ?�료: ${finalCanonicalTitle} (${finalAuthors.slice(0, 2).join(", ")} et al., ${finalYear})`,
-        claimText: `공식 ?�문 ?��? ?�별 ?�료: ${finalCanonicalTitle} (${finalAuthors.slice(0, 2).join(", ")} et al., ${finalYear})`,
+        sourceLocation: "논문 서지 정보",
+        evidenceLocation: "논문 서지 정보",
+        claim: `공식 논문 서지 정보 확인: ${finalCanonicalTitle} (${finalAuthors.slice(0, 2).join(", ")} et al., ${finalYear})`,
+        claimText: `공식 논문 서지 정보 확인: ${finalCanonicalTitle} (${finalAuthors.slice(0, 2).join(", ")} et al., ${finalYear})`,
         verificationLevel: "PAPER_REPORTED_VERIFIED",
         verificationStatus: "DIRECTLY_VERIFIED",
       });
@@ -400,7 +401,7 @@ Deterministic Knowledge Baseline:
       peerReviewed: parsed.peerReviewed ?? (Boolean(finalVenue && !finalVenue.toLowerCase().includes("arxiv") && !finalVenue.toLowerCase().includes("preprint"))),
       isPreprint: parsed.isPreprint ?? (Boolean(finalVenue && (finalVenue.toLowerCase().includes("arxiv") || finalVenue.toLowerCase().includes("preprint")))),
       versionInfo: {
-        publicationStatus: parsed.versionInfo?.publicationStatus || finalVenue,
+        publicationStatus: normalizePublicationStatus({ publicationStatus: parsed.versionInfo?.publicationStatus || parsed.publicationStatus, venueOrPreprint: finalVenue, arxivId: finalArxivId, biorxivId: finalBiorxivId, peerReviewed: parsed.peerReviewed, isPreprint: parsed.isPreprint }),
         version: parsed.versionInfo?.version || "v1",
         firstPublishedAt: parsed.versionInfo?.firstPublishedAt || `${finalYear}-01-01`,
         lastUpdatedAt: parsed.versionInfo?.lastUpdatedAt || null,
@@ -414,7 +415,7 @@ Deterministic Knowledge Baseline:
         isPreprint: parsed.publishingReliabilityDetails?.isPreprint ?? true,
         scoreReason:
           parsed.publishingReliabilityDetails?.scoreReason ||
-          `${finalVenue} 메�??�이??�?${finalIdentityStatus} ?�원 검�??�료`,
+          `서지 정보 확인: ${finalVenue || "출처 미확정"} · ${finalIdentityStatus}`,
         officialSourceUrl: parsed.publishingReliabilityDetails?.officialSourceUrl || finalUrl,
       },
       evidence: processedEvidence,
@@ -519,11 +520,11 @@ Deterministic Knowledge Baseline:
       isRankingEligible: deterministicResolution.entityType === "PAPER" && deterministicResolution.identityStatus === "IDENTITY_VERIFIED",
       matchConfidence: deterministicResolution.matchConfidence,
       matchReason: deterministicResolution.matchReason,
-      publicationStatus: deterministicResolution.venueOrPreprint || paper.venue,
+      publicationStatus: normalizePublicationStatus({ venueOrPreprint: deterministicResolution.venueOrPreprint || paper.venue, arxivId: deterministicResolution.arxivId, biorxivId: null, peerReviewed: false, isPreprint: true }),
       peerReviewed: false,
       isPreprint: true,
       versionInfo: {
-        publicationStatus: paper.venue,
+        publicationStatus: normalizePublicationStatus({ venueOrPreprint: paper.venue, arxivId: deterministicResolution.arxivId, peerReviewed: false, isPreprint: true }),
         version: "v1",
         firstPublishedAt: `${paper.year}-01-01`,
         lastUpdatedAt: null,
@@ -545,8 +546,8 @@ Deterministic Knowledge Baseline:
           sourceTitle: deterministicResolution.canonicalTitle,
           sourceReference: deterministicResolution.canonicalTitle,
           sourceUrl: deterministicResolution.canonicalUrl,
-          sourceLocation: "?�보 ?�별 ?�보",
-          evidenceLocation: "?�보 ?�별 ?�보",
+          sourceLocation: "후보 서지 정보",
+          evidenceLocation: "후보 서지 정보",
           claim: deterministicResolution.matchReason,
           claimText: deterministicResolution.matchReason,
           verificationLevel: "PAPER_REPORTED_VERIFIED",
@@ -556,6 +557,9 @@ Deterministic Knowledge Baseline:
     };
   }
 }
+
+
+
 
 
 

@@ -188,17 +188,17 @@ export async function evaluatePaper(
     return {
       paperId: metadata.paperId,
       scores: {
-        performance: unverifiedDimension("?쇰Ц ?좎썝 誘명솗??NOT_FOUND)?쇰줈 ?됯? 蹂대쪟"),
-        novelty: unverifiedDimension("?쇰Ц ?좎썝 誘명솗??NOT_FOUND)?쇰줈 ?됯? 蹂대쪟"),
-        trendImportance: unverifiedDimension("?쇰Ц ?좎썝 誘명솗??NOT_FOUND)?쇰줈 ?됯? 蹂대쪟"),
-        academicSignificance: unverifiedDimension("?쇰Ц ?좎썝 誘명솗??NOT_FOUND)?쇰줈 ?됯? 蹂대쪟"),
-        practicalValue: unverifiedDimension("?쇰Ц ?좎썝 誘명솗??NOT_FOUND)?쇰줈 ?됯? 蹂대쪟"),
-        reproducibility: unverifiedDimension("?쇰Ц ?좎썝 誘명솗??NOT_FOUND)?쇰줈 ?됯? 蹂대쪟"),
+        performance: unverifiedDimension("논문 신원이 확인되지 않아 평가를 보류했습니다."),
+        novelty: unverifiedDimension("논문 신원이 확인되지 않아 평가를 보류했습니다."),
+        trendImportance: unverifiedDimension("논문 신원이 확인되지 않아 평가를 보류했습니다."),
+        academicSignificance: unverifiedDimension("논문 신원이 확인되지 않아 평가를 보류했습니다."),
+        practicalValue: unverifiedDimension("논문 신원이 확인되지 않아 평가를 보류했습니다."),
+        reproducibility: unverifiedDimension("논문 신원이 확인되지 않아 평가를 보류했습니다."),
       },
       uncertainty: {
-        factVerificationItems: ["?먮Ц ?앸퀎 ?ㅽ뙣濡??섏튂 寃利?遺덇?"],
+        factVerificationItems: ["논문 서지 확인 실패로 수치 검증 불가"],
         insufficientEvidenceItems: ["논문 서지 및 실험 데이터 미확보"],
-        researchOpenQuestions: ["?숈씪 ?곌뎄???뺥솗???쒖? ?뺣낫 ?뺤씤 ?꾩슂"],
+        researchOpenQuestions: ["동일 연구의 정확한 서지 정보 확인 필요"],
       },
       verificationBadges: {
         metadataVerified: false,
@@ -222,19 +222,18 @@ export async function evaluatePaper(
 
   const systemInstruction = `
 You are an expert peer reviewer and paper evaluation engine.
-Evaluate the candidate paper across 6 core radar dimensions based on verified facts and evidence collected so far.
+Evaluate the candidate paper across the 5 user-facing evaluation axes. Keep performance evidence as a separate metadata/evidence item, not a mandatory score axis. 모든 사용자 설명, 판단, 근거 요약은 한국어로 작성한다. 논문 제목, 저자명, venue, 모델명, dataset, benchmark, 공식 기술명과 metric만 원문 표기를 유지한다.
 
-6 CORE RADAR DIMENSIONS:
-1. performance (?깅뒫 寃쎌웳??: Evaluate quantitative performance claims against SOTA/baselines.
-   - RULE: If performance table or benchmark evidence is reported directly in the paper, assign score based on paper evidence (with verificationLevel='PAPER_REPORTED_VERIFIED').
-   - If performance numbers are NOT found or unverified, set score=null, status='NEEDS_VERIFICATION'. Do NOT assign arbitrary 3 or 4 points.
-2. novelty (諛⑸쾿濡좎쟻 ?좉퇋??: Innovation of proposed architecture/formulation.
-3. trendImportance (?곌뎄 ?먮쫫??以묒슂??: Relevance to current research trends.
-4. academicSignificance (?숈닠???좎쓽誘몄꽦): Academic impact and rigour.
-5. practicalValue (?ㅻТ쨌?곌뎄 ?곸슜 媛移?: Applicability, open code/weights, utility.
-6. reproducibility (?ы쁽 媛?μ꽦): Code/data/checkpoint/environment availability.
-   - Base reproducibility score strictly on verified code/data availability.
-   - If code is NOT_FOUND or execution was NOT_PERFORMED, do NOT assign 4 or 5 points. Set score <= 2 or null.
+5 USER-FACING EVALUATION AXES mapped to legacy schema keys:
+1. trendImportance -> 주제 적합도: relevance to this weekly briefing topic.
+2. novelty -> 방법론 신규성: method or architecture novelty.
+3. practicalValue -> 연구 가치: research usefulness, insight value, and likely follow-up value.
+4. academicSignificance -> 학술 신뢰도: rigor, grounded evidence, publication status, and claim support. Publication type is metadata, not a score by itself.
+5. reproducibility -> 재현 가능성: code, weights, dataset, config/environment, training and evaluation procedure.
+
+Separate evidence metadata:
+- performance is NOT a required core score. Score it only when comparable benchmark, metric, baseline, table, gain, or ablation evidence exists.
+- If performance evidence is absent, set performance.score=null and status='INSUFFICIENT_EVIDENCE'. Do not assign 0.
 
 EACH DIMENSION RETURN STRUCTURE:
 {
@@ -306,7 +305,7 @@ Comparison Module:
         const d = (rawScores as any)[dimKey] || {};
         let scoreVal = typeof d.score === "number" ? d.score : null;
         let status: ScoreStatus = d.status || (scoreVal !== null ? "SCORED" : "INSUFFICIENT_EVIDENCE");
-        let reason = d.reason || "?됯? 洹쇨굅 寃利??꾨즺";
+        let reason = d.reason || "평가 근거 추가 확인 필요";
         const scope: ScoreScope = d.scope || "QUALITATIVE_ONLY";
 
         const rawEvidenceList = Array.isArray(d.evidence) ? d.evidence : [];
@@ -319,10 +318,10 @@ Comparison Module:
             sourceTitle: ev.sourceReference || ev.sourceTitle || metadata.canonicalTitle,
             sourceReference: ev.sourceReference || ev.sourceTitle || metadata.canonicalTitle,
             sourceUrl: metadata.canonicalUrl || metadata.url || null,
-            sourceLocation: ev.evidenceLocation || ev.sourceLocation || "?먮Ц",
-            evidenceLocation: ev.evidenceLocation || ev.sourceLocation || "?먮Ц",
-            claim: ev.claimText || ev.claim || "?먮Ц 蹂닿퀬 ?댁슜",
-            claimText: ev.claimText || ev.claim || "?먮Ц 蹂닿퀬 ?댁슜",
+            sourceLocation: ev.evidenceLocation || ev.sourceLocation || "논문 원문",
+            evidenceLocation: ev.evidenceLocation || ev.sourceLocation || "논문 원문",
+            claim: ev.claimText || ev.claim || "논문 보고 내용",
+            claimText: ev.claimText || ev.claim || "논문 보고 내용",
             verificationLevel: (ev.verificationLevel || "PAPER_REPORTED_VERIFIED") as any,
             verificationStatus: (ev.verificationLevel === "NEEDS_VERIFICATION" || ev.verificationLevel === "INSUFFICIENT_EVIDENCE" ? "NOT_VERIFIED" : "DIRECTLY_VERIFIED") as any,
           }));
@@ -337,8 +336,8 @@ Comparison Module:
             sourceUrl: ev.sourceUrl || null,
             sourceLocation: ev.evidenceLocation || ev.sourceLocation || "?몃? 異쒖쿂",
             evidenceLocation: ev.evidenceLocation || ev.sourceLocation || "?몃? 異쒖쿂",
-            claim: ev.claimText || ev.claim || "?몃? 寃利??꾨즺",
-            claimText: ev.claimText || ev.claim || "?몃? 寃利??꾨즺",
+            claim: ev.claimText || ev.claim || "외부 검증 내용",
+            claimText: ev.claimText || ev.claim || "외부 검증 내용",
             verificationLevel: (ev.verificationLevel || "EXTERNALLY_CORROBORATED") as any,
             verificationStatus: (ev.verificationLevel === "NEEDS_VERIFICATION" || ev.verificationLevel === "INSUFFICIENT_EVIDENCE" ? "NOT_VERIFIED" : "DIRECTLY_VERIFIED") as any,
           }));
@@ -351,8 +350,8 @@ Comparison Module:
             sourceTitle: ev.sourceReference || ev.sourceTitle || "AI 醫낇빀 遺꾩꽍",
             sourceReference: ev.sourceReference || ev.sourceTitle || "AI 醫낇빀 遺꾩꽍",
             sourceUrl: null,
-            sourceLocation: ev.evidenceLocation || ev.sourceLocation || "醫낇빀 ?댁꽍",
-            evidenceLocation: ev.evidenceLocation || ev.sourceLocation || "醫낇빀 ?댁꽍",
+            sourceLocation: ev.evidenceLocation || ev.sourceLocation || "AI 종합 해석",
+            evidenceLocation: ev.evidenceLocation || ev.sourceLocation || "AI 종합 해석",
             claim: ev.claimText || ev.claim || "醫낇빀 異붾줎",
             claimText: ev.claimText || ev.claim || "醫낇빀 異붾줎",
             verificationLevel: (ev.verificationLevel || "NEEDS_VERIFICATION") as any,
@@ -363,11 +362,11 @@ Comparison Module:
           aiInterpEv.push({
             evidenceType: "AI_INTERPRETATION" as const,
             sourceType: "AI_INTERPRETATION" as const,
-            sourceTitle: "?됯? 洹쇨굅 ?붿빟",
-            sourceReference: "?됯? 洹쇨굅 ?붿빟",
+            sourceTitle: "평가 근거 요약",
+            sourceReference: "평가 근거 요약",
             sourceUrl: null,
-            sourceLocation: "醫낇빀 ?됯?",
-            evidenceLocation: "醫낇빀 ?됯?",
+            sourceLocation: "종합 평가",
+            evidenceLocation: "종합 평가",
             claim: reason,
             claimText: reason,
             verificationLevel: (status === "SCORED" ? "EXTERNALLY_CORROBORATED" : "NEEDS_VERIFICATION") as any,
@@ -384,7 +383,7 @@ Comparison Module:
           if (!hasDirectPerf && scoreVal !== null && scoreVal > 3) {
             scoreVal = null;
             status = "NEEDS_VERIFICATION";
-            reason = "?뺣웾 ?깅뒫 寃곌낵 誘명솗蹂대줈 ?먯닔 蹂대쪟 (異붽? ?뺤씤 ?꾩슂)";
+            reason = "정량 성능 결과 근거가 부족해 성능 점수를 보류했습니다.";
           }
         }
 
@@ -394,7 +393,7 @@ Comparison Module:
           if (resources.executionVerification !== "PASSED" && scoreVal !== null && scoreVal > 3) {
             scoreVal = resources.codeStatus === "AVAILABLE_VERIFIED" ? 3 : 2;
             status = resources.codeStatus === "AVAILABLE_VERIFIED" ? "SCORED" : "NEEDS_VERIFICATION";
-            reason = `${reason} (?낅┰ ?ㅽ뻾 寃利?誘몄떎?쒕줈 理쒕? 3???쒗븳)`;
+            reason = `${reason} (실행 검증 또는 데이터 준비 절차가 부족해 점수를 제한했습니다.)`;
           }
 
           if (
@@ -403,7 +402,7 @@ Comparison Module:
             scoreVal > 3
           ) {
             scoreVal = resources.codeStatus === "AVAILABLE_VERIFIED" ? 3 : 1;
-            reason = `${reason} (?곗씠?곗뀑 誘멸났媛쒕줈 理쒓퀬 ?먯닔 遺??遺덇?)`;
+            reason = `${reason} (실행 검증 또는 데이터 준비 절차가 부족해 점수를 제한했습니다.)`;
           }
         }
 
@@ -432,10 +431,10 @@ Comparison Module:
         metadata.crossVerificationStatus === "SINGLE_SOURCE" ||
         metadata.identityStatus === "IDENTITY_VERIFIED" ||
         metadata.identityStatus === "RESOLVED_FROM_METHOD_OR_PROJECT";
-      const hasPubVerified = metadata.peerReviewed || metadata.isPreprint;
-      const hasCodeVerified = resources.codeStatus === "AVAILABLE_VERIFIED";
+      const hasPubVerified = metadata.peerReviewed === true || metadata.publicationStatus === "PEER_REVIEWED" || metadata.publicationStatus === "PUBLISHED";
+      const hasCodeVerified = ["CODE_AVAILABLE_VERIFIED", "AVAILABLE_VERIFIED"].includes(resources.codeStatus);
       const hasDataVerified =
-        resources.dataStatus === "AVAILABLE_VERIFIED" || resources.dataStatus === "AVAILABLE_WITH_RESTRICTIONS";
+        ["PUBLIC_DATASET_VERIFIED", "PUBLIC_BENCHMARK_USED", "AVAILABLE_VERIFIED", "AVAILABLE_WITH_RESTRICTIONS"].includes(resources.dataStatus);
       const hasPerfVerified = scores.performance?.score !== null && scores.performance?.status === "SCORED";
       const hasReprVerified =
         resources.executionVerification === "PASSED" && resources.reproducibilityLevel === "REPRODUCIBLE";
@@ -451,7 +450,7 @@ Comparison Module:
 
       const verificationScope: VerificationScope = {
         metadata: hasMetadataVerified ? "VERIFIED" : "SINGLE_SOURCE",
-        publication: hasPubVerified ? "VERIFIED" : "SINGLE_SOURCE",
+        publication: hasPubVerified ? "VERIFIED" : (metadata.isPreprint || metadata.publicationStatus === "PREPRINT" ? "SINGLE_SOURCE" : "NOT_CHECKED"),
         code: hasCodeVerified ? "VERIFIED" : "NOT_FOUND",
         data: hasDataVerified ? "VERIFIED" : "NOT_FOUND",
         performance: hasPerfVerified ? "VERIFIED" : "NOT_CHECKED",
@@ -483,6 +482,11 @@ Comparison Module:
         providerUsage: result.usage,
         groundingEnabled: false,
       });
+
+      scores.topicRelevance = scores.trendImportance;
+      scores.methodNovelty = scores.novelty;
+      scores.researchValue = scores.practicalValue;
+      scores.academicReliability = scores.academicSignificance;
 
       const evalResult: PaperEvaluationResult = {
         paperId: metadata.paperId,
@@ -575,17 +579,17 @@ Comparison Module:
     return {
       paperId: metadata.paperId,
       scores: {
-        performance: insufficientDimension("?됯? ?붿쭊 ?묐떟 ?ㅻ쪟濡??먯닔 蹂대쪟"),
-        novelty: insufficientDimension("?됯? ?붿쭊 ?묐떟 ?ㅻ쪟濡??먯닔 蹂대쪟"),
-        trendImportance: insufficientDimension("?됯? ?붿쭊 ?묐떟 ?ㅻ쪟濡??먯닔 蹂대쪟"),
-        academicSignificance: insufficientDimension("?됯? ?붿쭊 ?묐떟 ?ㅻ쪟濡??먯닔 蹂대쪟"),
-        practicalValue: insufficientDimension("?됯? ?붿쭊 ?묐떟 ?ㅻ쪟濡??먯닔 蹂대쪟"),
-        reproducibility: insufficientDimension("?됯? ?붿쭊 ?묐떟 ?ㅻ쪟濡??먯닔 蹂대쪟"),
+        performance: insufficientDimension("평가 응답 오류로 점수를 보류했습니다."),
+        novelty: insufficientDimension("평가 응답 오류로 점수를 보류했습니다."),
+        trendImportance: insufficientDimension("평가 응답 오류로 점수를 보류했습니다."),
+        academicSignificance: insufficientDimension("평가 응답 오류로 점수를 보류했습니다."),
+        practicalValue: insufficientDimension("평가 응답 오류로 점수를 보류했습니다."),
+        reproducibility: insufficientDimension("평가 응답 오류로 점수를 보류했습니다."),
       },
       uncertainty: {
-        factVerificationItems: ["?먮Ц ?섏튂 ?ш?利??꾩슂"],
-        insufficientEvidenceItems: ["?됯? ?④퀎 ?ㅻ쪟濡?洹쇨굅 蹂대쪟"],
-        researchOpenQuestions: ["?꾩냽 ?곌뎄 ?뺤옣 媛?μ꽦 ?먯깋"],
+        factVerificationItems: ["논문 수치 재검증 필요"],
+        insufficientEvidenceItems: ["평가 단계 오류로 근거 보류"],
+        researchOpenQuestions: ["후속 연구 확장 가능성 확인"],
       },
       verificationBadges: {
         metadataVerified: true,
@@ -607,6 +611,12 @@ Comparison Module:
     };
   }
 }
+
+
+
+
+
+
 
 
 

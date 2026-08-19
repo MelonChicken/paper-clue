@@ -1,10 +1,9 @@
-import crypto from "crypto";
-import { AnalysisMode } from "../observability/types";
+﻿import crypto from "crypto";
 
 export interface PipelineContext {
   analysisRunId: string;
   briefingHash: string;
-  analysisMode: AnalysisMode;
+  analysisMode: "STANDARD";
   forceRefresh: boolean;
   parsedPaperIds: string[];
   stageResults: Map<string, unknown>;
@@ -27,14 +26,13 @@ export function computeBriefingHash(markdown: string): string {
 export function createPipelineContext(
   analysisRunId: string,
   briefingMarkdown: string,
-  analysisMode: AnalysisMode = "STANDARD",
   forceRefresh = false
 ): PipelineContext {
   const briefingHash = computeBriefingHash(briefingMarkdown);
   return {
     analysisRunId,
     briefingHash,
-    analysisMode,
+    analysisMode: "STANDARD",
     forceRefresh,
     parsedPaperIds: [],
     stageResults: new Map(),
@@ -47,3 +45,4 @@ export function createPipelineContext(
     cacheEligibility: "REUSABLE",
   };
 }
+

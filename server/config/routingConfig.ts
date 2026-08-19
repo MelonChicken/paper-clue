@@ -1,4 +1,4 @@
-import { StageName, AnalysisMode } from "../observability/types";
+﻿import { StageName } from "../observability/types";
 
 export interface ModelRoute {
   stage: StageName;
@@ -112,29 +112,12 @@ export function getRouteConfig(stage: StageName): ModelRoute {
   return baseRoute;
 }
 
-export const MODE_BUDGETS: Record<AnalysisMode, AnalysisBudgetConfig> = {
-  QUICK: {
-    maxApiCalls: 15,
-    maxInputTokens: 100_000,
-    maxOutputTokens: 20_000,
-    maxSearchQueries: 10,
-    maxEstimatedCostUsd: 0.20,
-    maxDocumentAnalyses: 0,
-  },
-  STANDARD: {
-    maxApiCalls: 35,
-    maxInputTokens: 300_000,
-    maxOutputTokens: 60_000,
-    maxSearchQueries: 25,
-    maxEstimatedCostUsd: 0.60,
-    maxDocumentAnalyses: 2,
-  },
-  DEEP: {
-    maxApiCalls: 60,
-    maxInputTokens: 800_000,
-    maxOutputTokens: 150_000,
-    maxSearchQueries: 50,
-    maxEstimatedCostUsd: 1.50,
-    maxDocumentAnalyses: 5,
-  },
+export const STANDARD_ANALYSIS_BUDGET: AnalysisBudgetConfig = {
+  maxApiCalls: 35,
+  maxInputTokens: 300_000,
+  maxOutputTokens: 60_000,
+  maxSearchQueries: 25,
+  maxEstimatedCostUsd: 0.60,
+  maxDocumentAnalyses: 2,
 };
+

@@ -6,7 +6,7 @@ import {
 } from "./types";
 import { Navbar } from "./components/Navbar";
 import { FlowStep } from "./components/StepperNav";
-import { StartSection, AnalysisMode } from "./components/StartSection";
+import { StartSection } from "./components/StartSection";
 import { AnalysisLoading } from "./components/AnalysisLoading";
 import { ResearchOverview } from "./components/ResearchOverview";
 import { CandidateComparison } from "./components/CandidateComparison";
@@ -23,7 +23,6 @@ export default function App() {
   const [viewState, setViewState] = useState<"start" | "loading" | "results">("start");
   const [analysisData, setAnalysisData] = useState<BriefingAnalysisResponse | null>(null);
   const [lastMarkdown, setLastMarkdown] = useState<string>("");
-  const [lastMode, setLastMode] = useState<AnalysisMode>("STANDARD");
   const [userSelections, setUserSelections] = useState<Record<string, CandidateUserStatus>>({});
   const [finalChoicePaperId, setFinalChoicePaperId] = useState<string | null>(null);
   const [comparedPaperIds, setComparedPaperIds] = useState<string[]>([]);
@@ -58,21 +57,16 @@ export default function App() {
     }
   };
 
-  const handleStartAnalysis = async (
-    briefingMarkdown: string,
-    mode: AnalysisMode = "STANDARD",
-    forceRefresh = false
-  ) => {
+  const handleStartAnalysis = async (briefingMarkdown: string, forceRefresh = false) => {
     setViewState("loading");
     setErrorMessage(null);
     setLastMarkdown(briefingMarkdown);
-    setLastMode(mode);
 
     try {
       const response = await fetch("/api/analyze-briefing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ briefingMarkdown, analysisMode: mode, mode, forceRefresh }),
+        body: JSON.stringify({ briefingMarkdown, forceRefresh }),
       });
 
       const responseText = await response.text();
@@ -220,7 +214,7 @@ export default function App() {
                   </div>
 
                   <button
-                    onClick={() => handleStartAnalysis(lastMarkdown, lastMode, true)}
+                    onClick={() => handleStartAnalysis(lastMarkdown, true)}
                     className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all shrink-0 inline-flex items-center space-x-1.5"
                   >
                     <RotateCcw className="w-4 h-4" />
@@ -310,6 +304,7 @@ export default function App() {
     </div>
   );
 }
+
 
 
 

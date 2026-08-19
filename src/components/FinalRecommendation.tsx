@@ -1,6 +1,7 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { AiRecommendation, PaperCandidate } from "../types";
 import { BookmarkCheck, CheckCircle2, ArrowRight, Copy, Check, FileDown, BookOpen, Info, ListChecks } from "lucide-react";
+import { buildCanonicalPaperEvaluation, buildCanonicalRecommendationResult, sanitizeUserText, formatEvidenceForUser, formatStrengthForUser } from "../utils/paperSemantics";
 
 interface FinalRecommendationProps {
   recommendation: AiRecommendation;
@@ -21,21 +22,28 @@ export const FinalRecommendation: React.FC<FinalRecommendationProps> = ({
   const recommendedPaper = candidates.find((c) => c.id === recommendation.topRecommendedPaperId);
   const chosenPaper = candidates.find((c) => c.id === finalChoicePaperId);
   const targetPaper = chosenPaper || recommendedPaper;
+  const targetCanonical = targetPaper ? buildCanonicalPaperEvaluation(targetPaper, recommendation) : null;
+  const canonicalRecommendation = buildCanonicalRecommendationResult(candidates, recommendation);
   const isUserDiffChoice = Boolean(finalChoicePaperId && finalChoicePaperId !== recommendation.topRecommendedPaperId);
+  const recommendationReason = formatStrengthForUser(
+    canonicalRecommendation.tradeoffExplanation ||
+      targetCanonical?.interpretation.strengths[0] ||
+      sanitizeUserText(recommendation.recommendationReason, "추천 사유를 표시할 수 없습니다. 근거 상세를 확인해 주세요."),
+    targetCanonical?.verification.publicationStatus || "UNKNOWN"
+  );
 
   const handleCopyReadingNote = async () => {
-    if (!targetPaper) return;
+    if (!targetPaper || !targetCanonical) return;
 
     const note = `# 읽기 노트: ${targetPaper.title}
 저자: ${targetPaper.authors.join(", ")} (${targetPaper.year})
-발표/게재: ${targetPaper.venueOrPreprint}
-링크: ${targetPaper.url || targetPaper.doi || targetPaper.arxivId || "N/A"}
+발표/게재: ${targetCanonical?.labels.publicationDisplay || "출판 상태 확인 필요"}
+링크: ${targetCanonical?.identity.primaryUrl || "확인 필요"}
 
 ## 선택 근거와 강점
-${recommendation.keyStrengths.slice(0, 3).map((s, i) => `${i + 1}. ${s}`).join("\n")}
+${(targetCanonical?.interpretation.strengths || []).slice(0, 3).map((s, i) => `${i + 1}. ${formatStrengthForUser(s, targetCanonical.verification.publicationStatus)}`).join("\n")}
 
-## 읽으면서 확인할 질문
-${recommendation.readingQuestions.slice(0, 3).map((q, i) => `${i + 1}. ${q}`).join("\n")}
+${targetCanonical && targetCanonical.readingGuide.preReadingChecks.length > 0 ? `## 읽기 전 확인 필요\n${targetCanonical.readingGuide.preReadingChecks.map((item) => `- ${formatEvidenceForUser(item)}`).join("\n")}\n\n` : ""}## 읽으면서 확인할 질문\n${(targetCanonical?.readingGuide.questions || []).slice(0, 3).map((q, i) => `${i + 1}. ${formatEvidenceForUser(q)}`).join("\n")}
 
 ## 다음 단계
 1. 방법론의 입력, 처리, 출력 구조를 확인한다.
@@ -51,7 +59,7 @@ ${recommendation.readingQuestions.slice(0, 3).map((q, i) => `${i + 1}. ${q}`).jo
     }
   };
 
-  if (!targetPaper) return null;
+  if (!targetPaper || !targetCanonical) return null;
 
   return (
     <section id="final-recommendation" className="bg-white rounded-xl border border-indigo-200 shadow-md p-6 sm:p-8 mb-10 relative overflow-hidden">
@@ -96,11 +104,16 @@ ${recommendation.readingQuestions.slice(0, 3).map((q, i) => `${i + 1}. ${q}`).jo
         <div className="text-indigo-300 text-xs font-mono font-semibold mb-1"># 이번 주 읽을 논문</div>
         <h3 className="text-xl sm:text-2xl font-bold text-white leading-tight mb-2">{targetPaper.title}</h3>
         <p className="text-xs sm:text-sm text-slate-300 mb-4">
-          {targetPaper.authors.join(", ")} · <span className="text-indigo-300">{targetPaper.venueOrPreprint}</span> ({targetPaper.year})
+          {targetCanonical.identity.authors.join(", ")} · <span className="text-indigo-300">{targetCanonical.labels.publicationDisplay}</span> ({targetCanonical.identity.year || "연도 확인 필요"})
         </p>
         <p className="text-xs text-slate-300 bg-slate-800/80 p-3.5 rounded-xl border border-slate-700/80 leading-relaxed">
-          {recommendation.recommendationReason}
+          {recommendationReason}
         </p>
+        {canonicalRecommendation.tradeoffExplanation && !isUserDiffChoice && (
+          <p className="text-xs text-amber-100 bg-amber-900/30 p-3.5 rounded-xl border border-amber-700/60 leading-relaxed mt-3">
+            {canonicalRecommendation.tradeoffExplanation}
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-7 text-xs leading-relaxed">
@@ -110,10 +123,10 @@ ${recommendation.readingQuestions.slice(0, 3).map((q, i) => `${i + 1}. ${q}`).jo
             <span>선택 근거와 강점</span>
           </h4>
           <ul className="space-y-2 text-slate-800">
-            {recommendation.keyStrengths.slice(0, 3).map((strength, idx) => (
+            {targetCanonical.interpretation.strengths.slice(0, 3).map((strength, idx) => (
               <li key={idx} className="flex items-start space-x-2">
                 <span className="w-4 h-4 rounded-full bg-indigo-200/80 text-indigo-800 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{idx + 1}</span>
-                <span className="text-slate-800 font-medium">{strength}</span>
+                <span className="text-slate-800 font-medium">{formatStrengthForUser(strength, targetCanonical.verification.publicationStatus)}</span>
               </li>
             ))}
           </ul>
@@ -125,10 +138,10 @@ ${recommendation.readingQuestions.slice(0, 3).map((q, i) => `${i + 1}. ${q}`).jo
             <span>읽으면서 확인할 질문</span>
           </h4>
           <ul className="space-y-2 text-slate-800">
-            {recommendation.readingQuestions.slice(0, 3).map((q, idx) => (
+            {targetCanonical.readingGuide.questions.slice(0, 3).map((q, idx) => (
               <li key={idx} className="flex items-start space-x-2">
                 <span className="w-4 h-4 rounded-full bg-emerald-200/80 text-emerald-800 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{idx + 1}</span>
-                <span className="text-slate-800 font-medium">{q}</span>
+                <span className="text-slate-800 font-medium">{formatEvidenceForUser(q)}</span>
               </li>
             ))}
           </ul>
@@ -168,3 +181,8 @@ ${recommendation.readingQuestions.slice(0, 3).map((q, i) => `${i + 1}. ${q}`).jo
     </section>
   );
 };
+
+
+
+
+
