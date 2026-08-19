@@ -66,7 +66,10 @@ export interface ProvenanceExpectation {
   modelVersion?: string;
 }
 
-const CACHE_DIR = path.join(process.cwd(), ".cache_store");
+const CACHE_DIR =
+    process.env.VERCEL
+        ? path.join("/tmp", "paper-quest-cache")
+        : path.join(process.cwd(), ".cache_store");
 
 class FileAndMemoryPipelineCache {
   private memoryMap = new Map<string, CacheEnvelope<any>>();
